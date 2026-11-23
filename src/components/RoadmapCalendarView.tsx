@@ -368,7 +368,7 @@ export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
                       <div
                         className="absolute bottom-1 top-1 w-px bg-cyan-500/45"
                         style={{ left: `${todayPct}%` }}
-                        title="Hoy: 22 Nov 2026"
+                        title={`Hoy: ${formatDayMonthLocal(today)}`}
                       />
 
                       <div
