@@ -8,6 +8,9 @@ import type {
   ApiLoadTeamResult,
   ApiModelInfo,
   ApiProjectSettings,
+  ApiRule,
+  ApiRuleCreate,
+  ApiRuleUpdate,
   ApiSetupStatus,
   ApiSnapshot,
   ApiTicket,
@@ -85,6 +88,14 @@ export const api = {
   loadBaseTeam: () =>
     request<ApiLoadTeamResult>('POST', '/api/admin/agents/load-base-team'),
 
+  listRules: () => request<ApiRule[]>('GET', '/api/admin/rules'),
+  createRule: (body: ApiRuleCreate) => request<ApiRule>('POST', '/api/admin/rules', body),
+  updateRule: (id: string, body: ApiRuleUpdate) =>
+    request<ApiRule>('PATCH', `/api/admin/rules/${encodeURIComponent(id)}`, body),
+  deleteRule: (id: string) =>
+    request<void>('DELETE', `/api/admin/rules/${encodeURIComponent(id)}`),
+  reorderRules: (ids: string[]) =>
+    request<ApiRule[]>('PUT', '/api/admin/rules/order', { ids }),
   listModels: () => request<ApiModelInfo[]>('GET', '/api/models'),
   listWorkspaces: () => request<ApiWorkspace[]>('GET', '/api/admin/workspaces'),
   getProjectSettings: () =>

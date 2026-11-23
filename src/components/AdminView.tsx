@@ -21,6 +21,7 @@ import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
+import { RulesPanel } from './RulesPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
 
 type AdminTab =
@@ -39,7 +40,7 @@ const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'connections', label: 'Conexiones API', enabled: true },
   { id: 'agents', label: 'Agentes', enabled: true },
   { id: 'project', label: 'Proyecto', enabled: true },
-  { id: 'rules', label: 'Reglas', enabled: false },
+  { id: 'rules', label: 'Reglas', enabled: true },
   { id: 'limits', label: 'Límites', enabled: false },
   { id: 'users', label: 'Usuarios', enabled: false },
   { id: 'audit', label: 'Auditoría', enabled: false },
@@ -202,6 +203,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         {tab === 'connections' && <ConnectionsPanel agents={agents} />}
 
         {tab === 'project' && <ProjectSettingsPanel />}
+
+        {tab === 'rules' && <RulesPanel />}
 
         {tab === 'db' && (
           <section className="max-w-3xl rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">

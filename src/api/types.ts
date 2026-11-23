@@ -73,6 +73,33 @@ export interface ApiProjectSettings {
   stack: string[];
 }
 
+export type ApiRuleSeverity = 'MUST' | 'SHOULD';
+
+export interface ApiRule {
+  id: string;
+  title: string;
+  description: string;
+  severity: ApiRuleSeverity;
+  enabled: boolean;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiRuleCreate {
+  title: string;
+  description?: string;
+  severity?: ApiRuleSeverity;
+  enabled?: boolean;
+}
+
+export interface ApiRuleUpdate {
+  title?: string;
+  description?: string;
+  severity?: ApiRuleSeverity;
+  enabled?: boolean;
+}
+
 export interface ApiAgent {
   id: string;
   name: string;
