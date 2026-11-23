@@ -54,6 +54,8 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [createOpen, setCreateOpen] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<TaskStage | null>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -214,7 +216,32 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
               return (
                 <div
                   key={stageKey}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-[#0A1120]/90"
+                  onDragOver={(e) => {
+                    if (!draggingId) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverStage !== stageKey) setDragOverStage(stageKey);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                      setDragOverStage((cur) => (cur === stageKey ? null : cur));
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const id = e.dataTransfer.getData('text/plain') || draggingId;
+                    setDraggingId(null);
+                    setDragOverStage(null);
+                    const dropped = tasks.find((t) => t.id === id);
+                    if (dropped && dropped.stage !== stageKey) {
+                      onMoveTaskStage(dropped.id, stageKey);
+                    }
+                  }}
+                  className={`flex flex-col overflow-hidden rounded-2xl border bg-[#0A1120]/90 transition-colors ${
+                    dragOverStage === stageKey && draggingId
+                      ? 'border-cyan-400/80 bg-cyan-500/5 ring-1 ring-cyan-400/50'
+                      : 'border-slate-800/80'
+                  }`}
                 >
                   <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3.5">
                     <div className="flex items-center gap-2">
@@ -241,8 +268,35 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                         const assignee = agentMap.get(task.assigneeId);
                         const prio = PRIORITY_TEXT[task.priority];
                         return (
-                          <motion.div
+                          <div
                             key={task.id}
+                            draggable
+                            tabIndex={0}
+                            aria-label={`${task.title}. Arrastra a otra columna, o usa Alt + flechas para moverla.`}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', task.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDraggingId(task.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingId(null);
+                              setDragOverStage(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (!e.altKey) return;
+                              if (e.key === 'ArrowLeft' && stageIdx > 0) {
+                                e.preventDefault();
+                                onMoveTaskStage(task.id, STAGES[stageIdx - 1]);
+                              } else if (e.key === 'ArrowRight' && stageIdx < STAGES.length - 1) {
+                                e.preventDefault();
+                                onMoveTaskStage(task.id, STAGES[stageIdx + 1]);
+                              }
+                            }}
+                            className={`cursor-grab rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 active:cursor-grabbing ${
+                              draggingId === task.id ? 'opacity-40' : ''
+                            }`}
+                          >
+                          <motion.div
                             layout
                             whileHover={{ y: -2 }}
                             transition={{ duration: 0.16 }}
@@ -304,6 +358,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                               </div>
                             </div>
                           </motion.div>
+                          </div>
                         );
                       })
                     )}
