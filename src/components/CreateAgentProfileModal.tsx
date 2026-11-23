@@ -37,6 +37,8 @@ import {
   WORKSPACE_LEVELS,
 } from '../data/agentTemplates';
 import { Agent } from '../types/orbis';
+import { AvatarEditor } from './AvatarEditor';
+import type { AvatarLook } from '../types/agentProfile';
 import { api } from '../api/client';
 import type { ApiModelInfo, ApiWorkspace } from '../api/types';
 
@@ -91,6 +93,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
   const [avatarColor, setAvatarColor] = useState('#EC4899');
   const [hairStyle, setHairStyle] = useState<HairStyle>('long');
   const [glasses, setGlasses] = useState(false);
+  const [look, setLook] = useState<AvatarLook>({});
 
   // Behavior Lists
   const [functions, setFunctions] = useState<string[]>(
@@ -189,6 +192,10 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
     setAvatarColor(tpl.avatar.color);
     setHairStyle(tpl.avatar.hairStyle ?? 'short');
     setGlasses(Boolean(tpl.avatar.glasses));
+    {
+      const { color: _c, glasses: _g, hairStyle: _h, ...tplLook } = tpl.avatar;
+      setLook(tplLook);
+    }
 
     setFunctions([...tpl.functions]);
     setRules([...tpl.rules]);
@@ -221,6 +228,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       setAvatarColor(agentToEdit.color);
       setHairStyle(agentToEdit.hairStyle ?? 'short');
       setGlasses(Boolean(agentToEdit.glasses));
+      setLook(agentToEdit.look ?? {});
 
       setFunctions(agentToEdit.functions ? [...agentToEdit.functions] : []);
       setRules(agentToEdit.rules ? [...agentToEdit.rules] : []);
@@ -366,6 +374,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
         color: avatarColor,
         hairStyle,
         glasses,
+        ...look,
       },
       functions,
       rules,
@@ -402,9 +411,10 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       const avatarChanged =
         avatarColor !== agentToEdit.color ||
         hairStyle !== (agentToEdit.hairStyle ?? 'short') ||
-        glasses !== Boolean(agentToEdit.glasses);
+        glasses !== Boolean(agentToEdit.glasses) ||
+        JSON.stringify(look) !== JSON.stringify(agentToEdit.look ?? {});
       if (avatarChanged) {
-        changedFields.avatar = { color: avatarColor, hairStyle, glasses };
+        changedFields.avatar = { color: avatarColor, hairStyle, glasses, ...look };
       }
 
       if (JSON.stringify(functions) !== JSON.stringify(agentToEdit.functions ?? [])) {
@@ -720,151 +730,18 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                   </div>
                 </div>
 
-                {/* Avatar Styling */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-4">
-                  <h4 className="text-xs font-semibold text-slate-200">
-                    Aspecto en la Oficina 3D
-                  </h4>
-                  <div>
-                    <label className="block text-xs text-slate-400">
-                      Color Identificador
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-2.5">
-                      {AVATAR_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setAvatarColor(c)}
-                          className={`h-7 w-7 rounded-xl border-2 transition-all ${
-                            avatarColor === c
-                              ? 'scale-110 border-white shadow-md'
-                              : 'border-transparent hover:scale-105'
-                          }`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-xs text-slate-400">
-                        Estilo de Peinado
-                      </label>
-                      <select
-                        value={hairStyle}
-                        onChange={(e) => setHairStyle(e.target.value as HairStyle)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                      >
-                        {HAIR_STYLES.map((h) => (
-                          <option key={h.id} value={h.id}>
-                            {h.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-5">
-                      <input
-                        type="checkbox"
-                        id="glasses-checkbox"
-                        checked={glasses}
-                        onChange={(e) => setGlasses(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400"
-                      />
-                      <label
-                        htmlFor="glasses-checkbox"
-                        className="text-xs font-medium text-slate-300"
-                      >
-                        Lentes / Gafas 3D
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Previsualización Visual del Avatar estilo LEGO */}
-                  <div className="mt-4 rounded-xl border border-slate-800/90 bg-[#040810] p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {/* Avatar LEGO SVG Ilustrado dinámico */}
-                      <div className="relative flex h-24 w-20 shrink-0 items-center justify-center rounded-xl bg-slate-950/80 border border-slate-800 p-2 shadow-inner">
-                        <svg viewBox="0 0 100 130" className="h-full w-full drop-shadow-md">
-                          {/* Stud Superior */}
-                          <rect x="42" y="6" width="16" height="8" rx="2" fill="#FCD34D" stroke="#EAB308" strokeWidth="1.5" />
-                          {/* Cabello */}
-                          {hairStyle === 'short' && (
-                            <path d="M 30 20 Q 50 12 70 20 L 72 26 L 28 26 Z" fill="#3B2618" />
-                          )}
-                          {hairStyle === 'parted' && (
-                            <path d="M 28 22 Q 45 10 72 18 L 74 27 L 38 27 Q 32 23 28 22 Z" fill="#3B2618" />
-                          )}
-                          {hairStyle === 'long' && (
-                            <path d="M 27 20 Q 50 11 73 20 L 76 46 L 68 46 L 68 28 L 32 28 L 32 46 L 24 46 Z" fill="#D97706" />
-                          )}
-                          {hairStyle === 'bun' && (
-                            <g>
-                              <circle cx="50" cy="8" r="7" fill="#3B2618" />
-                              <path d="M 30 21 Q 50 14 70 21 L 70 26 L 30 26 Z" fill="#3B2618" />
-                            </g>
-                          )}
-                          {hairStyle === 'curly' && (
-                            <path d="M 26 22 Q 50 10 74 22 Q 78 28 72 32 Q 50 26 28 32 Z" fill="#1C1917" />
-                          )}
-                          {/* Cabeza Cilíndrica LEGO */}
-                          <rect x="33" y="18" width="34" height="26" rx="4" fill="#FCD34D" stroke="#EAB308" strokeWidth="1" />
-                          {/* Cejas */}
-                          <path d="M 39 23 L 45 24 M 55 24 L 61 23" stroke="#451A03" strokeWidth="1.8" strokeLinecap="round" />
-                          {/* Ojos con punto blanco de brillo */}
-                          <circle cx="42" cy="28" r="2.2" fill="#0F172A" />
-                          <circle cx="43" cy="27" r="0.8" fill="#FFFFFF" />
-                          <circle cx="58" cy="28" r="2.2" fill="#0F172A" />
-                          <circle cx="59" cy="27" r="0.8" fill="#FFFFFF" />
-                          {/* Gafas */}
-                          {glasses && (
-                            <g stroke="#0F172A" strokeWidth="1.8" fill="none">
-                              <rect x="37" y="24" width="10" height="9" rx="2" />
-                              <rect x="53" y="24" width="10" height="9" rx="2" />
-                              <line x1="47" y1="28" x2="53" y2="28" />
-                            </g>
-                          )}
-                          {/* Sonrisa LEGO */}
-                          <path d="M 45 37 Q 50 41 55 37" stroke="#451A03" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-                          {/* Cuello */}
-                          <rect x="44" y="44" width="12" height="4" fill="#FCD34D" />
-                          {/* Torso Trapezoidal LEGO */}
-                          <polygon points="32,48 68,48 74,84 26,84" fill={avatarColor} stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-                          {/* Detalle en Torso: Badge Tech */}
-                          <rect x="45" y="52" width="10" height="14" rx="2" fill="#0F172A" opacity="0.4" />
-                          <circle cx="50" cy="56" r="2.5" fill="#38BDF8" />
-                          {/* Brazos LEGO */}
-                          <path d="M 31 48 L 22 72 L 20 80" stroke={avatarColor} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                          <path d="M 69 48 L 78 72 L 80 80" stroke={avatarColor} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                          {/* Manos Pinza LEGO */}
-                          <path d="M 17 84 A 4 4 0 1 1 23 88" stroke="#FCD34D" strokeWidth="2.5" fill="none" />
-                          <path d="M 77 88 A 4 4 0 1 1 83 84" stroke="#FCD34D" strokeWidth="2.5" fill="none" />
-                          {/* Pelvis / Cintura */}
-                          <rect x="30" y="84" width="40" height="8" rx="1.5" fill="#1E293B" />
-                          {/* Piernas Rectangulares LEGO */}
-                          <rect x="30" y="92" width="18" height="26" fill="#1E293B" stroke="#0F172A" strokeWidth="1" />
-                          <rect x="52" y="92" width="18" height="26" fill="#1E293B" stroke="#0F172A" strokeWidth="1" />
-                          {/* Zapatos */}
-                          <rect x="29" y="118" width="19" height="7" rx="1" fill="#0F172A" />
-                          <rect x="52" y="118" width="19" height="7" rx="1" fill="#0F172A" />
-                        </svg>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-xs text-slate-100">{name || 'Agente'}</span>
-                          <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300">
-                            LEGO PROCEDURAL
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          Minifigura 3D procedural con cinemática directa, pinzas articuladas y peinado estilizado en la Oficina 3D.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {/* Editor completo del personaje: género, piel, cabello, ropa, colores y más */}
+                <AvatarEditor
+                  name={name}
+                  color={avatarColor}
+                  onColor={setAvatarColor}
+                  hairStyle={hairStyle}
+                  onHairStyle={setHairStyle}
+                  glasses={glasses}
+                  onGlasses={setGlasses}
+                  look={look}
+                  onLook={(patch) => setLook((prev) => ({ ...prev, ...patch }))}
+                />
               </div>
             )}
 

@@ -16,31 +16,38 @@ export interface ZoneSlot {
   x: number;
   z: number;
   yaw: number;
+  /** 'sit' = sentado (silla, puf, sofá); 'lie' = acostado (cama). Sin pose: de pie / según su estado. */
+  pose?: 'sit' | 'lie';
+  /** Altura a la que se desplaza el cuerpo respecto al suelo para apoyarse en el asiento o la cama. */
+  y?: number;
 }
 
 // ---------------------------------------------------------------------------
 // Distribución Arquitectónica FlowClic Oficina IA:
 //   - Ala Norte (Fondo):
-//       * Extremo Izquierdo: OFICINA DEL CEO (cx: -23.5, cz: -7.7, w: 16, d: 12.4)
+//       * Extremo Izquierdo: OFICINA DEL CEO (cx: -22.5, cz: -7.7, w: 18, d: 12.4) -> PEGADA A SHELDON (x = -13.5)
 //       * Centro Izquierdo:  OFICINA DE SHELDON (cx: -7.5, cz: -7.7, w: 12, d: 12.4) -> PEGADA AL CEO
-//       * Centro Derecho:    OFICINA DEL SENIOR (cx: 7.5, cz: -7.7, w: 12, d: 12.4)
-//       * Extremo Derecho:   SALA DE JUNTAS (cx: 21.5, cz: -7.7, w: 14, d: 12.4) -> AL LADO DEL SENIOR
-//   - Pasillo Horizontal Central (z = 0, CORRIDOR_W = 3) con el logo central
+//       * Centro Derecho:    OFICINA DEL LEONARD (cx: 4.5, cz: -7.7, w: 12, d: 12.4)
+//       * Extremo Derecho:   SALA DE JUNTAS (cx: 17.5, cz: -7.7, w: 14, d: 12.4) -> PEGADA A LEONARD
+//   - Único pasillo: horizontal (z = 0, CORRIDOR_W = 3) entre ambas alas; las oficinas de cada ala van pegadas
 //   - Ala Sur (Frente):
 //       * Izquierda completa: LABORATORIO EXPANDIDO (cx: -15.5, cz: 7.7, w: 28, d: 12.4) -> 20 PUESTOS DE TRABAJO,
 //                              ubicado enfrente de la Oficina de Sheldon y la Oficina del CEO.
-//       * Centro Derecho:    ZONA DE DESCANSO (cx: 7.5, cz: 7.7, w: 12, d: 12.4)
-//       * Extremo Derecho:   DATA CENTER (cx: 21.5, cz: 7.7, w: 14, d: 12.4) -> AL FRENTE DE SALA DE JUNTAS Y AL LADO DE DESCANSO
+//       * Centro Derecho:    ZONA DE DESCANSO (cx: 4.5, cz: 7.7, w: 12, d: 12.4)
+//       * Extremo Derecho:   DATA CENTER (cx: 17.5, cz: 7.7, w: 14, d: 12.4) -> PEGADO A DESCANSO
 // ---------------------------------------------------------------------------
 export const ROOM_W = 12;
 export const ROOM_D = 12.4;
-export const CORRIDOR_W = 3;
-export const ROOM_CX = CORRIDOR_W / 2 + ROOM_W / 2; // 7.5
-export const ROOM_CZ = CORRIDOR_W / 2 + ROOM_D / 2; // 7.7
+export const CORRIDOR_W = 5;
+export const ROOM_CX = 7.5; // centro de la oficina de Sheldon: x = -7.5 (ya no depende del ancho del pasillo)
+export const ROOM_CZ = CORRIDOR_W / 2 + ROOM_D / 2; // 8.7
+// Filas pegadas (sin pasillo vertical): Sheldon -13.5..-1.5 | Leonard -1.5..10.5 | Juntas 10.5..24.5
+export const SENIOR_CX = 4.5; // Oficina de Leonard / Zona de descanso
+export const WING_E_CX = 17.5; // Sala de juntas / Data center (w: 14)
 
 // Centro original de cada zona (coordenadas con las que está escrito el mobiliario base)
 const ORIG = {
-  laboratorio: { x: -9.1, z: -0.2 },
+  laboratorio: { x: -13.5, z: -0.2 },
   sheldon: { x: 0.2, z: -0.2 },
   descanso: { x: 9.45, z: -0.2 },
 };
@@ -49,11 +56,11 @@ const offsetTo = (orig: { x: number; z: number }, cx: number, cz: number) => ({
   dz: cz - orig.z,
 });
 
-// El laboratorio expandido tiene su centro en x = -15.5, z = 7.7
+// El laboratorio (x -31.5..-1.5) tiene el mismo límite oeste que la oficina del CEO
 export const ZONE_OFFSETS = {
-  laboratorio: offsetTo(ORIG.laboratorio, -15.5, ROOM_CZ),
+  laboratorio: offsetTo(ORIG.laboratorio, -16.5, ROOM_CZ),
   sheldon: offsetTo(ORIG.sheldon, -ROOM_CX, -ROOM_CZ),
-  descanso: offsetTo(ORIG.descanso, ROOM_CX, ROOM_CZ),
+  descanso: offsetTo(ORIG.descanso, SENIOR_CX, ROOM_CZ),
 };
 
 type Offset = { dx: number; dz: number };
@@ -61,42 +68,18 @@ const shiftSlot = (s: ZoneSlot, o: Offset): ZoneSlot => ({ ...s, x: s.x + o.dx, 
 
 // Laboratorio: 20 Workstations ampliadas (5 columnas x 4 filas frente a monitores)
 // con pasillos amplios de tránsito
-const RAW_WORKSTATION_SLOTS: ZoneSlot[] = [
-  // Fila 1 (Norte)
-  { x: -19.5, z: -3.8, yaw: Math.PI },
-  { x: -16.5, z: -3.8, yaw: Math.PI },
-  { x: -13.5, z: -3.8, yaw: Math.PI },
-  { x: -10.5, z: -3.8, yaw: Math.PI },
-  { x: -7.5, z: -3.8, yaw: Math.PI },
-
-  // Fila 2
-  { x: -19.5, z: -1.2, yaw: Math.PI },
-  { x: -16.5, z: -1.2, yaw: Math.PI },
-  { x: -13.5, z: -1.2, yaw: Math.PI },
-  { x: -10.5, z: -1.2, yaw: Math.PI },
-  { x: -7.5, z: -1.2, yaw: Math.PI },
-
-  // Fila 3
-  { x: -19.5, z: 1.4, yaw: Math.PI },
-  { x: -16.5, z: 1.4, yaw: Math.PI },
-  { x: -13.5, z: 1.4, yaw: Math.PI },
-  { x: -10.5, z: 1.4, yaw: Math.PI },
-  { x: -7.5, z: 1.4, yaw: Math.PI },
-
-  // Fila 4 (Sur)
-  { x: -19.5, z: 4.0, yaw: Math.PI },
-  { x: -16.5, z: 4.0, yaw: Math.PI },
-  { x: -13.5, z: 4.0, yaw: Math.PI },
-  { x: -10.5, z: 4.0, yaw: Math.PI },
-  { x: -7.5, z: 4.0, yaw: Math.PI },
-];
+const RAW_WORKSTATION_SLOTS: ZoneSlot[] = Array.from({ length: 20 }, (_, i) => ({
+  x: -20.7 + (i % 5) * 3.6,
+  z: -4.2 + Math.floor(i / 5) * 2.8,
+  yaw: Math.PI,
+}));
 
 // Oficina de Sheldon: Work & Review Hub (Apartamento 4A)
 // CTO: se sienta en su escritorio al trabajar, se para frente a los tableros al revisar
 // y descansa en el sofá del costado.
 const RAW_SHELDON_DESK_SLOT: ZoneSlot = { x: 0.2, z: -0.38, yaw: Math.PI };
 const RAW_SHELDON_BOARD_SLOT: ZoneSlot = { x: 0.2, z: -4.75, yaw: Math.PI };
-const RAW_SHELDON_SOFA_SLOT: ZoneSlot = { x: 5.45, z: 2.2, yaw: -Math.PI / 2 };
+const RAW_SHELDON_SOFA_SLOT: ZoneSlot = { x: 5.45, z: 2.2, yaw: -Math.PI / 2, pose: 'sit', y: -0.03 };
 
 // Resto del equipo que espera revisión: en fila delante del escritorio
 const RAW_REVIEW_SLOTS: ZoneSlot[] = [
@@ -112,18 +95,60 @@ const RAW_REVIEW_SLOTS: ZoneSlot[] = [
 ];
 
 // Zona de descanso: Rest & Lounge Zone
+// Mesas de la cafetería: (x, z) de cada mesa y asientos W/S/E/N con su orientación hacia la mesa
+const DINING_TABLES: Array<[number, number]> = [
+  [7.5, -2.2],
+  [11.5, -2.2],
+  [7.5, 1.4],
+  [11.5, 1.4],
+];
+const chairSlot = (tx: number, tz: number, side: 0 | 1 | 2 | 3): ZoneSlot => {
+  const o: Array<[number, number, number]> = [
+    [-0.85, 0, Math.PI / 2],
+    [0, 0.85, Math.PI],
+    [0.85, 0, -Math.PI / 2],
+    [0, -0.85, 0],
+  ];
+  return { x: tx + o[side][0], z: tz + o[side][1], yaw: o[side][2], pose: 'sit', y: -0.01 };
+};
+// Literas: x, z y altura del colchón (inferior 0.59 / superior 1.55) + 0.13 de grosor del cuerpo
+const BUNKS: Array<[number, number]> = [
+  [4.2, -2.4],
+  [4.2, 0.4],
+  [14.7, -2.4],
+  [14.7, 0.4],
+];
+const bedSlot = (b: [number, number], upper: boolean): ZoneSlot => ({
+  x: b[0],
+  z: b[1],
+  yaw: 0,
+  pose: 'lie',
+  y: upper ? 1.7 : 0.72,
+});
+const pufSlot = (x: number): ZoneSlot => ({ x, z: 3.65, yaw: 0, pose: 'sit', y: -0.14 });
+
+// Descanso normal: mezcla de pufs, sillas y camas
 const RAW_LOUNGE_SLOTS: ZoneSlot[] = [
-  { x: 7.4, z: -0.4, yaw: 0 }, // Sofa left
-  { x: 8.8, z: -0.4, yaw: 0 }, // Sofa center
-  { x: 10.2, z: -0.4, yaw: 0 }, // Sofa right (Sheldon's spot!)
-  { x: 6.2, z: 1.7, yaw: -Math.PI * 0.35 }, // Armchair
-  { x: 11.7, z: 1.8, yaw: Math.PI * 0.4 }, // Near coffee table / TV
-  { x: 7.1, z: -4.2, yaw: 0 }, // Bunk pod 1
-  { x: 9.8, z: -4.2, yaw: 0 }, // Bunk pod 2
-  { x: 12.2, z: -3.6, yaw: Math.PI * 0.7 }, // Near DNA sculpture / books
-  { x: 7.8, z: 4.1, yaw: Math.PI }, // Lounge mat 1
-  { x: 10.4, z: 4.1, yaw: Math.PI }, // Lounge mat 2
-  { x: 12.4, z: -0.6, yaw: Math.PI * 0.5 }, // Bookshelf reading
+  pufSlot(6.8),
+  chairSlot(7.5, -2.2, 0),
+  bedSlot(BUNKS[0], false),
+  pufSlot(9.5),
+  chairSlot(11.5, -2.2, 2),
+  bedSlot(BUNKS[2], false),
+  pufSlot(12.2),
+  chairSlot(7.5, 1.4, 0),
+  bedSlot(BUNKS[1], false),
+  chairSlot(11.5, 1.4, 0),
+  bedSlot(BUNKS[3], false),
+];
+// Desayuno / almuerzo: todos sentados a las mesas (4 mesas x 4 sillas = 16)
+const RAW_MEAL_SLOTS: ZoneSlot[] = DINING_TABLES.flatMap(([tx, tz]) =>
+  ([0, 2, 1, 3] as const).map((side) => chairSlot(tx, tz, side))
+);
+// Dormir: todos acostados en las camas (4 literas x 2 niveles = 8)
+const RAW_SLEEP_SLOTS: ZoneSlot[] = [
+  ...BUNKS.map((b) => bedSlot(b, false)),
+  ...BUNKS.map((b) => bedSlot(b, true)),
 ];
 
 export const WORKSTATION_SLOTS: ZoneSlot[] = RAW_WORKSTATION_SLOTS.map((s) =>
@@ -138,16 +163,18 @@ export const REVIEW_SLOTS: ZoneSlot[] = RAW_REVIEW_SLOTS.map((s) =>
 export const LOUNGE_SLOTS: ZoneSlot[] = RAW_LOUNGE_SLOTS.map((s) =>
   shiftSlot(s, ZONE_OFFSETS.descanso)
 );
+export const MEAL_SLOTS: ZoneSlot[] = RAW_MEAL_SLOTS.map((s) => shiftSlot(s, ZONE_OFFSETS.descanso));
+export const SLEEP_SLOTS: ZoneSlot[] = RAW_SLEEP_SLOTS.map((s) => shiftSlot(s, ZONE_OFFSETS.descanso));
 
 /** Puertas de cada oficina hacia el pasillo horizontal (z = ±1.5). */
 export const DOORS = {
   sheldon: { x: -ROOM_CX, z: -CORRIDOR_W / 2 },
-  senior: { x: ROOM_CX, z: -CORRIDOR_W / 2 },
-  junta: { x: 21.5, z: -CORRIDOR_W / 2 },
-  laboratorio: { x: -15.5, z: CORRIDOR_W / 2 },
-  descanso: { x: ROOM_CX, z: CORRIDOR_W / 2 },
-  ceo: { x: -23.5, z: -CORRIDOR_W / 2 },
-  datacenter: { x: 21.5, z: CORRIDOR_W / 2 },
+  senior: { x: SENIOR_CX, z: -CORRIDOR_W / 2 },
+  junta: { x: WING_E_CX, z: -CORRIDOR_W / 2 },
+  laboratorio: { x: -16.5, z: CORRIDOR_W / 2 },
+  descanso: { x: SENIOR_CX, z: CORRIDOR_W / 2 },
+  ceo: { x: -22.5, z: -CORRIDOR_W / 2 },
+  datacenter: { x: WING_E_CX, z: CORRIDOR_W / 2 },
 };
 
 /**
@@ -174,48 +201,56 @@ export function sheldonDetour(
 }
 
 // Sala de juntas: Al lado de la oficina del Senior en el ala norte (cx: 21.5, cz: -ROOM_CZ)
-export const BOARDROOM = { cx: 21.5, cz: -ROOM_CZ, w: 14, d: ROOM_D };
+export const BOARDROOM = { cx: WING_E_CX, cz: -ROOM_CZ, w: 14, d: ROOM_D };
 
 // Data Center: Al frente de la Sala de Juntas y al lado de la Zona de Descanso en el ala sur (cx: 21.5, cz: ROOM_CZ)
-export const DATACENTER = { cx: 21.5, cz: ROOM_CZ, w: 14, d: ROOM_D };
+export const DATACENTER = { cx: WING_E_CX, cz: ROOM_CZ, w: 14, d: ROOM_D };
 
-// Oficina del CEO: Pegada a la oficina de Sheldon en el ala norte (cx: -23.5, cz: -ROOM_CZ)
-export const CEO_OFFICE = { cx: -23.5, cz: -ROOM_CZ, w: 16, d: ROOM_D };
+// Oficina del CEO: Pegada a la oficina de Sheldon en el ala norte (cx: -22.5, cz: -ROOM_CZ)
+export const CEO_OFFICE = { cx: -22.5, cz: -ROOM_CZ, w: 18, d: ROOM_D };
 
 // Dimensiones del Laboratorio expandido a mano izquierda
-export const LAB_EXPANDED = { cx: -15.5, cz: ROOM_CZ, w: 28, d: ROOM_D };
+export const LAB_EXPANDED = { cx: -16.5, cz: ROOM_CZ, w: 30, d: ROOM_D };
+
+// Puesto del CEO: sentado en su sillón presidencial, de cara a la puerta
+export const CEO_DESK_SLOT: ZoneSlot = { x: CEO_OFFICE.cx, z: CEO_OFFICE.cz - 1.7 - 1.5, yaw: 0, pose: 'sit', y: 0.065 };
 
 // Slots de visita frente al escritorio del CEO donde vienen Sheldon y Leonard a esperar aprobaciones
 export const CEO_VISITOR_SLOTS = {
-  chairSheldon: { x: -23.6, z: -ROOM_CZ - 1.25, yaw: -Math.PI / 2 } as ZoneSlot,
-  chairLeonard: { x: -23.6, z: -ROOM_CZ + 1.25, yaw: -Math.PI / 2 } as ZoneSlot,
+  chairSheldon: { x: -22.5 - 1.25, z: -ROOM_CZ + 0.5, yaw: Math.PI, pose: 'sit', y: 0 } as ZoneSlot,
+  chairLeonard: { x: -22.5 + 1.25, z: -ROOM_CZ + 0.5, yaw: Math.PI, pose: 'sit', y: 0 } as ZoneSlot,
 };
 
 const SEAT_SPACING = 1.15;
+export const BOARDROOM_SEATS = 15;
 export function boardroomLayout(n: number) {
+  n = Math.max(n, BOARDROOM_SEATS);
   const perSide = Math.ceil(Math.max(0, n - 1) / 2);
   return { perSide, L: Math.max(3, perSide * SEAT_SPACING + 0.6) };
 }
 /** Asientos de la sala de juntas. El 0 es la cabecera (CTO); el resto, a los lados de la mesa. */
 export function boardroomSeats(n: number): ZoneSlot[] {
+  n = Math.max(n, BOARDROOM_SEATS);
   const { perSide, L } = boardroomLayout(n);
   const seats: ZoneSlot[] = [];
-  if (n >= 1) seats.push({ x: BOARDROOM.cx + L / 2 + 0.9, z: BOARDROOM.cz, yaw: -Math.PI / 2 });
+  if (n >= 1) seats.push({ x: BOARDROOM.cx + L / 2 + 0.9, z: BOARDROOM.cz, yaw: -Math.PI / 2, pose: 'sit', y: 0 });
   for (let i = 0; i < n - 1; i++) {
     const north = i % 2 === 0;
     const k = Math.floor(i / 2);
     seats.push({
       x: BOARDROOM.cx - ((perSide - 1) * SEAT_SPACING) / 2 + k * SEAT_SPACING,
-      z: BOARDROOM.cz + (north ? -1.35 : 1.35),
+      z: BOARDROOM.cz + (north ? -1.6 : 1.6),
       yaw: north ? 0 : Math.PI,
+      pose: 'sit',
+      y: 0,
     });
   }
   return seats;
 }
 
 // Oficina del Senior (grupo en ROOM_CX, -ROOM_CZ)
-export const SENIOR_DESK_SLOT: ZoneSlot = { x: ROOM_CX, z: -ROOM_CZ - 0.48, yaw: Math.PI };
-export const SENIOR_POUF_SLOT: ZoneSlot = { x: ROOM_CX + 3.8, z: -ROOM_CZ + 1.8, yaw: Math.PI };
+export const SENIOR_DESK_SLOT: ZoneSlot = { x: SENIOR_CX, z: -ROOM_CZ - 0.48, yaw: Math.PI };
+export const SENIOR_POUF_SLOT: ZoneSlot = { x: SENIOR_CX + 3.8, z: -ROOM_CZ + 1.8, yaw: Math.PI, pose: 'sit', y: 0.02 };
 
 /**
  * Ruta (coordenadas del mundo) para que un agente del laboratorio vaya a entregar su tarea
@@ -224,8 +259,8 @@ export const SENIOR_POUF_SLOT: ZoneSlot = { x: ROOM_CX + 3.8, z: -ROOM_CZ + 1.8,
 export function labTaskSwapPath(deskIdx: number): Array<{ x: number; z: number }> {
   const o = ZONE_OFFSETS.laboratorio;
   const d = RAW_WORKSTATION_SLOTS[deskIdx];
-  const gx = d.x + 1.25; // pasillo libre entre columnas de escritorios
-  const rowZ = -5.2;
+  const gx = d.x + 1.8; // pasillo libre entre columnas de escritorios
+  const rowZ = -5.8;
   const fidget = (bx: number) => [
     { x: bx, z: rowZ },
     { x: bx + 0.4, z: rowZ },
@@ -236,8 +271,8 @@ export function labTaskSwapPath(deskIdx: number): Array<{ x: number; z: number }
   const pts = [
     { x: gx, z: d.z },
     { x: gx, z: rowZ },
-    ...fidget(-11.6),
-    ...fidget(-6.6),
+    ...fidget(-17.5),
+    ...fidget(-9.5),
     { x: gx, z: rowZ },
     { x: gx, z: d.z },
     { x: d.x, z: d.z },
@@ -269,9 +304,9 @@ export const ZONE_LABEL_ANCHORS = [
   },
   {
     id: 'oficina-senior',
-    title: 'OFICINA DEL SENIOR',
+    title: 'OFICINA DEL LEONARD',
     subtitle: 'Desarrollo Full-Stack',
-    pos: new THREE.Vector3(ROOM_CX, 3.3, -ROOM_CZ - ROOM_D / 2 + 0.8),
+    pos: new THREE.Vector3(SENIOR_CX, 3.3, -ROOM_CZ - ROOM_D / 2 + 0.8),
     accent: '#A78BFA',
   },
   {
@@ -292,7 +327,7 @@ export const ZONE_LABEL_ANCHORS = [
     id: 'zona-descanso',
     title: 'ZONA DE DESCANSO',
     subtitle: 'Lounge & Reposo',
-    pos: new THREE.Vector3(ROOM_CX, 3.3, CORRIDOR_W / 2 + 0.6),
+    pos: new THREE.Vector3(SENIOR_CX, 3.3, CORRIDOR_W / 2 + 0.6),
     accent: '#FB923C',
   },
 ];
@@ -301,6 +336,38 @@ export interface BoardProject {
   name: string;
   total: number;
   done: number;
+}
+
+/** Datos reales del equipo que alimentan todas las pantallas y librerías de la oficina. */
+export interface OfficeStats {
+  online: boolean;
+  agents: Array<{
+    name: string;
+    status: string;
+    title: string;
+    isCTO: boolean;
+    task: string;
+    done: number;
+    active: number;
+    tokens: number;
+    ramKb: number;
+  }>;
+  stages: { backlog: number; in_dev: number; sheldon_review: number; ceo_approval: number; completed: number };
+  projects: BoardProject[];
+  inDevTitles: string[];
+  backlogTitles: string[];
+  approvalTitles: string[];
+}
+
+/** Contenido del panel que se abre al hacer clic en un equipo, tablero, pantalla o librero. */
+export interface InfoTarget {
+  title: string;
+  section: string;
+  description: string;
+  lines: string[];
+  images: string[];
+  /** true cuando todavía no hay información: el panel muestra el apartado donde irá. */
+  empty: boolean;
 }
 
 export interface BuiltOfficeScene {
@@ -319,6 +386,12 @@ export interface BuiltOfficeScene {
   setLabDesks: (entries: Array<{ name: string; task: string } | null>) => void;
   /** Tableros del laboratorio: tareas en curso (entregar) y backlog (tomar). */
   setLabBoards: (data: { inProgress: string[]; backlog: string[] }) => void;
+  /** Equipos, pantallas, tableros y librerías sobre los que se puede hacer clic. */
+  getInfoPickables: () => THREE.Object3D[];
+  /** Información del elemento que corresponde a un impacto del rayo, o null. */
+  resolveInfo: (hit: THREE.Intersection) => InfoTarget | null;
+  /** Alimenta pantallas, tableros y librerías de toda la oficina con datos reales. */
+  setOfficeStats: (s: OfficeStats) => void;
   /** Una silla por agente en la sala de juntas. */
   setBoardroomSeats: (n: number) => void;
   dispose: () => void;
@@ -386,15 +459,15 @@ export function buildColmenaOffice(
   );
 
   // --- Main Platform Base ---
-  // Abarca todo el complejo: desde x = -32.5 (CEO / Lab) hasta x = 29.5 (Juntas / Data Center)
+  // Abarca todo el complejo: desde x = -32.5 (CEO / Lab) hasta x = 24.5 (Juntas / Data Center)
   // y z = -14.5 a 14.5
-  const FULL_W = 62;
-  const FULL_D = 29;
+  const FULL_W = 57;
+  const FULL_D = 2 * ROOM_D + CORRIDOR_W;
   const platform = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(FULL_W, 0.44, FULL_D)),
     baseSlabMat
   );
-  platform.position.set(-1.5, -0.22, 0);
+  platform.position.set(-4, -0.22, 0);
   platform.receiveShadow = true;
   scene.add(platform);
 
@@ -412,7 +485,7 @@ export function buildColmenaOffice(
     trackGeo(new THREE.BoxGeometry(FULL_W + 0.2, 0.06, 0.08)),
     trimStripMat
   );
-  frontTrim.position.set(-1.5, -0.02, FULL_D / 2 + 0.04);
+  frontTrim.position.set(-4, -0.02, FULL_D / 2 + 0.04);
   scene.add(frontTrim);
 
   // Back Architectural Wall
@@ -420,19 +493,19 @@ export function buildColmenaOffice(
     trackGeo(new THREE.BoxGeometry(FULL_W + 0.2, 4.1, 0.28)),
     backWallMat
   );
-  backWall.position.set(-1.5, 2.05, -FULL_D / 2 - 0.14);
+  backWall.position.set(-4, 2.05, -FULL_D / 2 - 0.14);
   backWall.receiveShadow = true;
   scene.add(backWall);
 
   // Particiones de cristal en los bordes del pasillo (con puertas abiertas a cada oficina)
-  const addGlassWall = (x1: number, z1: number, x2: number, z2: number) => {
+  const addGlassWall = (x1: number, z1: number, x2: number, z2: number, mat: THREE.Material = glassWallMat) => {
     const len = Math.hypot(x2 - x1, z2 - z1);
     if (len < 0.05) return;
     const yaw = Math.atan2(-(z2 - z1), x2 - x1);
     const wall = new THREE.Group();
     wall.position.set((x1 + x2) / 2, 0, (z1 + z2) / 2);
     wall.rotation.y = yaw;
-    const glass = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(len, 3.0, 0.1)), glassWallMat);
+    const glass = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(len, 3.0, 0.1)), mat);
     glass.position.y = 1.5;
     const base = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(len, 0.9, 0.12)), darkMetalMat);
     base.position.y = 0.45;
@@ -446,35 +519,34 @@ export function buildColmenaOffice(
   };
   const HC = CORRIDOR_W / 2; // 1.5
   const DOOR_HALF = 1.3;
+  const WZ = HC + ROOM_D; // borde exterior norte/sur de las alas
   // Pared frontal norte de oficinas (z = -HC = -1.5) con puertas a cada una
-  // Oficinas norte: CEO (cx: -23.5), Sheldon (cx: -7.5), Senior (cx: 7.5), Juntas (cx: 21.5)
-  [-23.5, -7.5, 7.5, 21.5].forEach((cx) => {
-    const halfW = cx === -23.5 ? 8 : cx === 21.5 ? 7 : ROOM_W / 2;
+  // Oficinas norte: CEO (cx: -22.5), Sheldon (cx: -7.5), Senior (cx: 7.5), Juntas (cx: 21.5)
+  [-22.5, -7.5, SENIOR_CX, WING_E_CX].forEach((cx) => {
+    const halfW = cx === -22.5 ? 9 : cx === WING_E_CX ? 7 : ROOM_W / 2;
     addGlassWall(cx - halfW, -HC, cx - DOOR_HALF, -HC);
     addGlassWall(cx + DOOR_HALF, -HC, cx + halfW, -HC);
   });
   // Pared frontal sur de oficinas (z = HC = 1.5) con puertas a cada una
   // Oficinas sur: Lab (cx: -15.5, w: 28), Descanso (cx: 7.5, w: 12), Data Center (cx: 21.5, w: 14)
   // Lab
-  addGlassWall(-29.5, HC, -15.5 - DOOR_HALF, HC);
-  addGlassWall(-15.5 + DOOR_HALF, HC, -1.5, HC);
+  addGlassWall(-31.5, HC, -16.5 - DOOR_HALF, HC);
+  addGlassWall(-16.5 + DOOR_HALF, HC, -1.5, HC);
   // Descanso
-  addGlassWall(1.5, HC, 7.5 - DOOR_HALF, HC);
-  addGlassWall(7.5 + DOOR_HALF, HC, 13.5, HC);
+  addGlassWall(-1.5, HC, SENIOR_CX - DOOR_HALF, HC);
+  addGlassWall(SENIOR_CX + DOOR_HALF, HC, 10.5, HC);
   // Data Center
-  addGlassWall(14.5, HC, 21.5 - DOOR_HALF, HC);
-  addGlassWall(21.5 + DOOR_HALF, HC, 28.5, HC);
+  addGlassWall(10.5, HC, WING_E_CX - DOOR_HALF, HC);
+  addGlassWall(WING_E_CX + DOOR_HALF, HC, 24.5, HC);
 
   // Paredes divisorias entre oficinas:
-  // Norte (z ∈ [-14.5, -1.5]):
-  addGlassWall(-15.5, -14.5, -15.5, -HC); // Entre CEO y Sheldon (pared divisoria con puerta)
-  addGlassWall(-1.5, -14.5, -1.5, -HC);  // Entre Sheldon y pasillo central
-  addGlassWall(1.5, -14.5, 1.5, -HC);   // Entre pasillo central y Senior
-  addGlassWall(13.5, -14.5, 13.5, -HC);  // Entre Senior y Sala de Juntas
+  // Norte (pared exterior a pasillo):
+  addGlassWall(-13.5, -WZ, -13.5, -HC); // Entre CEO y Sheldon (vidrio transparente, igual que las demás paredes)
+  addGlassWall(-1.5, -WZ, -1.5, -HC);  // Entre Sheldon y Leonard
+  addGlassWall(10.5, -WZ, 10.5, -HC);  // Entre Leonard y Sala de Juntas
   // Sur (z ∈ [1.5, 14.5]):
-  addGlassWall(-1.5, HC, -1.5, 14.5);   // Límite este del Laboratorio
-  addGlassWall(1.5, HC, 1.5, 14.5);    // Límite oeste de Descanso
-  addGlassWall(13.5, HC, 13.5, 14.5);   // Entre Descanso y Data Center
+  addGlassWall(-1.5, HC, -1.5, WZ);   // Entre Laboratorio y Descanso
+  addGlassWall(10.5, HC, 10.5, WZ);   // Entre Descanso y Data Center
 
   // =========================================================================
   // PASILLO CENTRAL (Horizontal y conexión vertical) CON EL LOGO
@@ -491,14 +563,10 @@ export function buildColmenaOffice(
   );
   const corridorH = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(FULL_W, CORRIDOR_W)), corridorMat);
   corridorH.rotation.x = -Math.PI / 2;
-  corridorH.position.set(-1.5, 0.012, 0);
+  corridorH.position.set(-4, 0.012, 0);
   corridorH.receiveShadow = true;
 
-  const corridorV = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(CORRIDOR_W, FULL_D)), corridorMat);
-  corridorV.rotation.x = -Math.PI / 2;
-  corridorV.position.set(0, 0.012, 0);
-  corridorV.receiveShadow = true;
-  scene.add(corridorH, corridorV);
+  scene.add(corridorH);
 
   const logoCanvas = document.createElement('canvas');
   logoCanvas.width = 1024;
@@ -568,7 +636,7 @@ export function buildColmenaOffice(
     )
   );
   logoPlane.rotation.x = -Math.PI / 2;
-  logoPlane.position.set(0, 0.02, 0);
+  logoPlane.position.set(-4, 0.02, 0);
   scene.add(logoPlane);
 
   // Grupos de zona: el mobiliario conserva sus coordenadas originales dentro de cada grupo
@@ -582,7 +650,7 @@ export function buildColmenaOffice(
   const sheldonGroup = makeZoneGroup(ZONE_OFFSETS.sheldon);
   const loungeGroup = makeZoneGroup(ZONE_OFFSETS.descanso);
   const seniorGroup = new THREE.Group();
-  seniorGroup.position.set(ROOM_CX, 0, -ROOM_CZ);
+  seniorGroup.position.set(SENIOR_CX, 0, -ROOM_CZ);
   rootScene.add(seniorGroup);
 
   scene = labGroup;
@@ -728,6 +796,432 @@ export function buildColmenaOffice(
     rack.add(face);
     scene.add(rack);
   };
+  // --- Utilidades de decoración compartidas (librerías vacías, lámparas, alfombras, sofás) ---
+  const mulberry = (seed: number) => () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const clipTxt = (t: string, max: number) => (t.length > max ? t.slice(0, max - 1) + '…' : t);
+
+  // Estado compartido de las pantallas de información (datos reales del equipo)
+  let officeStats: OfficeStats = {
+    online: false,
+    agents: [],
+    stages: { backlog: 0, in_dev: 0, sheldon_review: 0, ceo_approval: 0, completed: 0 },
+    projects: [],
+    inDevTitles: [],
+    backlogTitles: [],
+    approvalTitles: [],
+  };
+  const infoRedraws: Array<() => void> = [];
+  const totalTickets = () => Object.values(officeStats.stages).reduce((a, b) => a + b, 0);
+
+  // Librerías: nacen VACÍAS y se llenan con un libro por proyecto y por tarea completada
+  const BOOK_SLOTS_PER_ROW = 20;
+  type InfoSpec = {
+    title: string;
+    section: string;
+    description: string;
+    lines?: () => string[];
+    images?: () => string[];
+    empty?: () => boolean;
+  };
+  const infoPickables: THREE.Object3D[] = [];
+  const infoSpecs = new Map<string, InfoSpec>();
+  let infoSeq = 0;
+  const registerInfo = (root: THREE.Object3D | THREE.Object3D[], spec: InfoSpec) => {
+    const key = 'info' + infoSeq++;
+    infoSpecs.set(key, spec);
+    (Array.isArray(root) ? root : [root]).forEach((r) =>
+      r.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) {
+          o.userData.infoKey = key;
+          infoPickables.push(o);
+        }
+      })
+    );
+  };
+  const canvasImages = (o: THREE.Object3D): string[] => {
+    const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+    const img = m?.map?.image as HTMLCanvasElement | undefined;
+    return img && typeof img.toDataURL === 'function' ? [img.toDataURL('image/png')] : [];
+  };
+  const resolveInfo = (hit: THREE.Intersection): InfoTarget | null => {
+    const key = hit.object.userData.infoKey as string | undefined;
+    const spec = key ? infoSpecs.get(key) : undefined;
+    if (!spec) return null;
+    return {
+      title: spec.title,
+      section: spec.section,
+      description: spec.description,
+      lines: spec.lines ? spec.lines() : [],
+      images: spec.images ? spec.images() : canvasImages(hit.object),
+      empty: spec.empty ? spec.empty() : false,
+    };
+  };
+  const noTeamData = () => officeStats.agents.length === 0 && totalTickets() === 0;
+  const agentLines = (a?: OfficeStats['agents'][number]) =>
+    a
+      ? [`Agente: ${a.name}`, `Estado: ${a.status}`, `Tarea actual: ${a.task || 'sin tarea'}`, `Tareas completadas: ${a.done}`]
+      : [];
+
+  type Library = { ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; rows: number; W: number; H: number; h: number; count: number };
+  const libraries: Library[] = [];
+  const bookPalette2 = ['#991b1b', '#1e3a8a', '#14532d', '#78350f', '#312e81', '#b45309', '#0f766e', '#7c2d12', '#581c87', '#e5e7eb'];
+  // Libros sobre baldas reales: la textura es transparente salvo donde hay libros
+  const libPitch = (lib: Library) => (lib.h - 0.04) / lib.rows;
+  const drawLibrary = (lib: Library, count: number, base: number) => {
+    const g = lib.ctx;
+    lib.count = count;
+    g.clearRect(0, 0, lib.W, lib.H);
+    const pitch = libPitch(lib);
+    const maxH = ((pitch - 0.1) / lib.h) * lib.H;
+    for (let r = 0; r < lib.rows; r++) {
+      const baseY = lib.H - ((r * pitch + 0.05) / lib.h) * lib.H;
+      for (let k = 0; k < BOOK_SLOTS_PER_ROW; k++) {
+        const idx = r * BOOK_SLOTS_PER_ROW + k;
+        if (idx >= count) break;
+        const rnd = mulberry(base + idx * 17 + 3);
+        const bw = 12 + rnd() * 8;
+        const bh = maxH * (0.62 + rnd() * 0.38);
+        const bx = 10 + k * 24.2;
+        g.fillStyle = bookPalette2[Math.floor(rnd() * bookPalette2.length)];
+        g.fillRect(bx, baseY - bh, bw, bh);
+        g.fillStyle = 'rgba(255,255,255,0.18)';
+        g.fillRect(bx + 2, baseY - bh + 6, bw - 4, 3);
+        g.fillStyle = 'rgba(0,0,0,0.25)';
+        g.fillRect(bx + bw - 3, baseY - bh, 3, bh);
+      }
+    }
+    lib.tex.needsUpdate = true;
+  };
+  /** Imagen del librero para el panel de información: madera, baldas y libros. */
+  const libraryImage = (lib: Library) => {
+    const c = document.createElement('canvas');
+    c.width = lib.W;
+    c.height = lib.H;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#24140b';
+    g.fillRect(0, 0, lib.W, lib.H);
+    g.fillStyle = '#5a3720';
+    const pitch = libPitch(lib);
+    for (let r = 0; r <= lib.rows; r++) {
+      const y = lib.H - ((r * pitch + 0.02) / lib.h) * lib.H;
+      g.fillRect(0, y - 6, lib.W, 12);
+    }
+    g.drawImage(lib.ctx.canvas, 0, 0);
+    return c.toDataURL('image/png');
+  };
+  const fillLibraries = (total: number) => {
+    let rem = Math.max(0, total);
+    libraries.forEach((lib, li) => {
+      const n = Math.min(lib.rows * BOOK_SLOTS_PER_ROW, rem);
+      rem -= n;
+      drawLibrary(lib, n, li * 1000);
+    });
+  };
+  const woodDarkMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x3a2214, roughness: 0.5, metalness: 0.05 }));
+  const addBookcase = (parent: THREE.Object3D, x: number, z: number, yaw: number, w = 2.4, h = 2.7, _seed = 0) => {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = yaw; // el frente (libros) mira a +z local
+    // Mismo estilo que los libreros de Sheldon: laterales, fondo y baldas abiertas
+    [-1, 1].forEach((sx) => {
+      const side = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.05, h, 0.42)), woodDarkMat);
+      side.position.set((sx * (w - 0.05)) / 2, h / 2, 0);
+      side.castShadow = true;
+      g.add(side);
+    });
+    const back = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w, h, 0.04)), woodDarkMat);
+    back.position.set(0, h / 2, -0.19);
+    g.add(back);
+    const rows = Math.max(3, Math.round(h / 0.55));
+    const pitch = (h - 0.04) / rows;
+    for (let r = 0; r <= rows; r++) {
+      const plank = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w - 0.1, 0.04, 0.42)), woodDarkMat);
+      plank.position.set(0, r * pitch + 0.02, 0);
+      g.add(plank);
+    }
+    const ct = makeCanvasTex(512, Math.round(128 * rows));
+    const lib: Library = { ctx: ct.ctx, tex: ct.tex, rows, W: 512, H: Math.round(128 * rows), h, count: 0 };
+    libraries.push(lib);
+    drawLibrary(lib, 0, 0);
+    const books = new THREE.Mesh(
+      trackGeo(new THREE.PlaneGeometry(w - 0.1, h)),
+      trackMat(new THREE.MeshStandardMaterial({ map: ct.tex, roughness: 0.7, alphaTest: 0.1 }))
+    );
+    books.position.set(0, h / 2, 0.1);
+    g.add(books);
+    parent.add(g);
+    registerInfo(g, {
+      title: 'LIBRERO',
+      section: 'Librería de gestión',
+      description: 'Aquí se archivan los libros de la gestión: uno por cada proyecto y por cada tarea completada.',
+      lines: () => [
+        `Libros archivados: ${lib.count} de ${lib.rows * BOOK_SLOTS_PER_ROW}`,
+        `Proyectos: ${officeStats.projects.length}`,
+        `Tareas completadas: ${officeStats.stages.completed}`,
+      ],
+      images: () => [libraryImage(lib)],
+      empty: () => lib.count === 0,
+    });
+  };
+
+  // Pantallas de información: título + cuerpo dibujado con datos reales del equipo
+  const createInfoTex = (
+    pw: number,
+    ph: number,
+    title: string,
+    accent: string,
+    body: (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void
+  ) => {
+    const ct = makeCanvasTex(pw, ph);
+    const draw = () => {
+      const g = ct.ctx;
+      g.fillStyle = '#050b16';
+      g.fillRect(0, 0, pw, ph);
+      const hh = Math.round(ph * 0.15);
+      g.fillStyle = '#0f172a';
+      g.fillRect(0, 0, pw, hh);
+      g.fillStyle = accent;
+      g.fillRect(0, hh - 4, pw, 4);
+      g.textAlign = 'left';
+      g.fillStyle = '#f8fafc';
+      g.font = `bold ${Math.round(hh * 0.5)}px sans-serif`;
+      g.fillText(title, pw * 0.03, hh * 0.68);
+      g.textAlign = 'right';
+      g.fillStyle = officeStats.online ? '#34d399' : '#f87171';
+      g.font = `${Math.round(hh * 0.34)}px monospace`;
+      g.fillText(officeStats.online ? '● EN VIVO' : '● SIN DATOS', pw * 0.97, hh * 0.64);
+      g.textAlign = 'left';
+      body(g, pw * 0.03, hh + ph * 0.04, pw * 0.94, ph - hh - ph * 0.08);
+      ct.tex.needsUpdate = true;
+    };
+    infoRedraws.push(draw);
+    draw();
+    return ct.tex;
+  };
+  const infoFrameMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x0b1220, roughness: 0.4, metalness: 0.6 }));
+  const addInfoScreen = (
+    parent: THREE.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    w: number,
+    h: number,
+    title: string,
+    accent: string,
+    body: (g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void
+  ) => {
+    const tex = createInfoTex(1024, Math.round((1024 * h) / w), title, accent, body);
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = yaw; // la pantalla mira a +z local
+    const fr = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.06)), infoFrameMat);
+    const pl = new THREE.Mesh(
+      trackGeo(new THREE.PlaneGeometry(w, h)),
+      trackMat(
+        new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.3 })
+      )
+    );
+    pl.position.z = 0.035;
+    g.add(fr, pl);
+    parent.add(g);
+    registerInfo(pl, {
+      title,
+      section: 'Pantalla de información',
+      description: `Aquí se muestra «${title}» con los datos del equipo en tiempo real.`,
+      empty: noTeamData,
+    });
+  };
+  const drawKpis = (
+    g: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    items: Array<[string, string, string]>
+  ) => {
+    const n = items.length;
+    const gap = w * 0.02;
+    const cw = (w - gap * (n - 1)) / n;
+    items.forEach(([label, val, col], i) => {
+      const cx = x + i * (cw + gap);
+      g.fillStyle = '#0b1329';
+      g.fillRect(cx, y, cw, h);
+      g.strokeStyle = '#1e293b';
+      g.lineWidth = 2;
+      g.strokeRect(cx, y, cw, h);
+      g.fillStyle = '#94a3b8';
+      g.font = `${Math.round(h * 0.2)}px monospace`;
+      g.fillText(label, cx + cw * 0.06, y + h * 0.3);
+      g.fillStyle = col;
+      g.font = `bold ${Math.round(h * 0.44)}px monospace`;
+      g.fillText(val, cx + cw * 0.06, y + h * 0.82);
+    });
+  };
+  const drawBars = (
+    g: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    rows: Array<{ label: string; value: number; color: string; text?: string }>,
+    max: number
+  ) => {
+    if (!rows.length) {
+      g.fillStyle = '#64748b';
+      g.font = `${Math.max(18, Math.round(h * 0.1))}px sans-serif`;
+      g.textAlign = 'center';
+      g.fillText('Sin datos todavía', x + w / 2, y + h / 2);
+      g.textAlign = 'left';
+      return;
+    }
+    const shown = rows.slice(0, 8);
+    const rh = Math.min(h / shown.length, h * 0.2);
+    const fs = Math.max(14, Math.round(rh * 0.5));
+    shown.forEach((r, i) => {
+      const ry = y + i * rh;
+      g.textAlign = 'left';
+      g.fillStyle = '#cbd5e1';
+      g.font = `${fs}px sans-serif`;
+      g.fillText(clipTxt(r.label, 16), x, ry + rh * 0.68);
+      const bx = x + w * 0.34;
+      const bw = w * 0.5;
+      g.fillStyle = '#0f172a';
+      g.fillRect(bx, ry + rh * 0.2, bw, rh * 0.5);
+      g.fillStyle = r.color;
+      g.fillRect(bx, ry + rh * 0.2, bw * Math.min(1, r.value / Math.max(1, max)), rh * 0.5);
+      g.fillStyle = '#f8fafc';
+      g.font = `bold ${fs}px monospace`;
+      g.textAlign = 'right';
+      g.fillText(r.text ?? String(r.value), x + w, ry + rh * 0.68);
+      g.textAlign = 'left';
+    });
+  };
+  const drawList = (
+    g: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    lines: string[],
+    color: string,
+    empty: string
+  ) => {
+    g.textAlign = 'left';
+    if (!lines.length) {
+      g.fillStyle = '#64748b';
+      g.font = `${Math.max(18, Math.round(h * 0.09))}px sans-serif`;
+      g.textAlign = 'center';
+      g.fillText(empty, x + w / 2, y + h / 2);
+      g.textAlign = 'left';
+      return;
+    }
+    const shown = lines.slice(0, 7);
+    const rh = Math.min(h / shown.length, h * 0.18);
+    const fs = Math.max(14, Math.round(rh * 0.5));
+    shown.forEach((ln, i) => {
+      g.fillStyle = color;
+      g.fillRect(x, y + i * rh + rh * 0.25, fs * 0.45, rh * 0.5);
+      g.fillStyle = '#e2e8f0';
+      g.font = `${fs}px sans-serif`;
+      g.fillText(clipTxt(ln, Math.round(w / (fs * 0.55))), x + fs, y + i * rh + rh * 0.7);
+    });
+    if (lines.length > shown.length) {
+      g.fillStyle = '#f59e0b';
+      g.font = `bold ${fs}px sans-serif`;
+      g.fillText(`+${lines.length - shown.length} más`, x, y + h);
+    }
+  };
+  const STAGE_META: Array<[keyof OfficeStats['stages'], string, string]> = [
+    ['backlog', 'BACKLOG', '#64748b'],
+    ['in_dev', 'EN DESARROLLO', '#10b981'],
+    ['sheldon_review', 'REVISIÓN SHELDON', '#f59e0b'],
+    ['ceo_approval', 'APROBACIÓN CEO', '#38bdf8'],
+    ['completed', 'COMPLETADAS', '#a78bfa'],
+  ];
+  const statusColor = (s: string) =>
+    s === 'working' ? '#10b981' : s === 'waiting_sheldon' ? '#f59e0b' : s === 'blocked' ? '#ef4444' : '#64748b';
+  const closeRate = () => {
+    const t = totalTickets();
+    return t ? Math.round((officeStats.stages.completed / t) * 100) : 0;
+  };
+  const setOfficeStats = (s: OfficeStats) => {
+    officeStats = s;
+    infoRedraws.forEach((f) => f());
+    fillLibraries(s.stages.completed + s.projects.length);
+  };
+
+  const lampShadeMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xfde68a,
+      emissive: 0xfbbf24,
+      emissiveIntensity: 0.7,
+      roughness: 0.6,
+      side: THREE.DoubleSide,
+    })
+  );
+  const addFloorLamp = (parent: THREE.Object3D, x: number, z: number) => {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    const base = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.22, 0.25, 0.05, 16)), darkMetalMat);
+    base.position.y = 0.025;
+    const pole = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.025, 0.025, 1.6, 8)), brushedAlumMat);
+    pole.position.y = 0.85;
+    const shade = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.2, 0.3, 0.36, 16, 1, true)), lampShadeMat);
+    shade.position.y = 1.75;
+    g.add(base, pole, shade);
+    parent.add(g);
+  };
+  const addRug = (parent: THREE.Object3D, x: number, z: number, w: number, d: number, color: number, trim = 0xfbbf24) => {
+    const rug = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(w, 0.025, d)),
+      trackMat(new THREE.MeshStandardMaterial({ color, roughness: 0.92 }))
+    );
+    rug.position.set(x, 0.05, z);
+    rug.receiveShadow = true;
+    const inner = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(w - 0.5, 0.03, d - 0.5)),
+      trackMat(new THREE.MeshStandardMaterial({ color: trim, roughness: 0.9, transparent: true, opacity: 0.18 }))
+    );
+    inner.position.set(x, 0.053, z);
+    parent.add(rug, inner);
+  };
+  const leatherMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5, metalness: 0.15 }));
+  const addSofa = (parent: THREE.Object3D, x: number, z: number, yaw: number, w = 3.2, color?: number) => {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = yaw; // el frente del sofá mira a +z local
+    const m = color ? trackMat(new THREE.MeshStandardMaterial({ color, roughness: 0.6 })) : leatherMat;
+    const seat = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w, 0.45, 1.0)), m);
+    seat.position.y = 0.32;
+    const back = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w, 0.7, 0.28)), m);
+    back.position.set(0, 0.75, -0.4);
+    [-1, 1].forEach((sx) => {
+      const arm = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.26, 0.6, 1.0)), m);
+      arm.position.set((sx * (w - 0.26)) / 2, 0.5, 0);
+      g.add(arm);
+    });
+    seat.castShadow = true;
+    g.add(seat, back);
+    parent.add(g);
+  };
+  const addCoffeeTable = (parent: THREE.Object3D, x: number, z: number, w = 1.6, d = 0.9) => {
+    const top = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(w, 0.06, d)),
+      trackMat(new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.18, metalness: 0.35 }))
+    );
+    top.position.set(x, 0.42, z);
+    const base = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w - 0.3, 0.38, d - 0.3)), darkMetalMat);
+    base.position.set(x, 0.2, z);
+    parent.add(top, base);
+  };
+
   const projectListeners: Array<() => void> = [];
   const spinners: THREE.Object3D[] = [];
 
@@ -735,6 +1229,7 @@ export function buildColmenaOffice(
   const BOARD_W_LAB = 3.2;
   const BOARD_H_LAB = 1.9;
   const labDeskTex: Array<{ plate: CTex; note: CTex }> = [];
+  let labDeskEntries: Array<{ name: string; task: string } | null> = [];
   const drawLabDesk = (i: number, entry: { name: string; task: string } | null) => {
     const t = labDeskTex[i];
     if (!t) return;
@@ -770,9 +1265,9 @@ export function buildColmenaOffice(
     // Place desk slightly ahead of the avatar (-Z because avatar faces PI = -Z)
     group.position.set(slotX, 0, slotZ - 0.72);
 
-    // 1. Desk tabletop
+    // 1. Desk tabletop (grande: 2.4 x 1.0)
     const top = new THREE.Mesh(
-      trackGeo(new THREE.BoxGeometry(1.75, 0.07, 0.82)),
+      trackGeo(new THREE.BoxGeometry(2.4, 0.07, 1.0)),
       deskTopMat
     );
     top.position.y = 0.74;
@@ -781,32 +1276,32 @@ export function buildColmenaOffice(
     group.add(top);
 
     // 2. Brushed aluminum desk legs
-    const legGeo = trackGeo(new THREE.BoxGeometry(0.07, 0.72, 0.68));
+    const legGeo = trackGeo(new THREE.BoxGeometry(0.07, 0.72, 0.86));
     const leftLeg = new THREE.Mesh(legGeo, brushedAlumMat);
-    leftLeg.position.set(-0.78, 0.36, 0);
+    leftLeg.position.set(-1.1, 0.36, 0);
     const rightLeg = new THREE.Mesh(legGeo, brushedAlumMat);
-    rightLeg.position.set(0.78, 0.36, 0);
+    rightLeg.position.set(1.1, 0.36, 0);
     group.add(leftLeg, rightLeg);
 
-    // 3. Dual glowing monitors (angled slightly inward)
-    const screenTex = monitorTextures[idx % monitorTextures.length];
-    const screenMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        map: screenTex,
-        emissiveMap: screenTex,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.85,
-        roughness: 0.18,
-        metalness: 0.1,
-      })
-    );
-    const bezelGeo = trackGeo(new THREE.BoxGeometry(0.68, 0.42, 0.035));
-    const displayGeo = trackGeo(new THREE.PlaneGeometry(0.63, 0.36));
+    // 3. Tres pantallas por puesto (las laterales ligeramente anguladas hacia el usuario)
+    const bezelGeo = trackGeo(new THREE.BoxGeometry(0.74, 0.46, 0.035));
+    const displayGeo = trackGeo(new THREE.PlaneGeometry(0.69, 0.4));
 
-    [-0.36, 0.36].forEach((mx, mIdx) => {
+    [-0.8, 0, 0.8].forEach((mx, mIdx) => {
+      const screenTex = monitorTextures[(idx + mIdx) % monitorTextures.length];
+      const screenMat = trackMat(
+        new THREE.MeshStandardMaterial({
+          map: screenTex,
+          emissiveMap: screenTex,
+          emissive: 0xffffff,
+          emissiveIntensity: 0.85,
+          roughness: 0.18,
+          metalness: 0.1,
+        })
+      );
       const monitor = new THREE.Group();
-      monitor.position.set(mx, 1.06, -0.2);
-      monitor.rotation.y = mIdx === 0 ? 0.18 : -0.18;
+      monitor.position.set(mx, 1.08, mIdx === 1 ? -0.3 : -0.22);
+      monitor.rotation.y = mIdx === 0 ? 0.24 : mIdx === 2 ? -0.24 : 0;
 
       const bezel = new THREE.Mesh(bezelGeo, darkMetalMat);
       bezel.castShadow = true;
@@ -817,21 +1312,21 @@ export function buildColmenaOffice(
       monitor.add(display);
 
       const stand = new THREE.Mesh(
-        trackGeo(new THREE.CylinderGeometry(0.025, 0.04, 0.24, 8)),
+        trackGeo(new THREE.CylinderGeometry(0.025, 0.04, 0.26, 8)),
         brushedAlumMat
       );
-      stand.position.set(0, -0.22, -0.02);
+      stand.position.set(0, -0.24, -0.02);
       monitor.add(stand);
 
       group.add(monitor);
     });
 
-    // 4. Mechanical keyboard with cyan glow rim
+    // 4. Teclado mecánico
     const kb = new THREE.Mesh(
-      trackGeo(new THREE.BoxGeometry(0.46, 0.025, 0.16)),
+      trackGeo(new THREE.BoxGeometry(0.6, 0.025, 0.2)),
       darkMetalMat
     );
-    kb.position.set(0, 0.79, 0.12);
+    kb.position.set(0, 0.79, 0.15);
     group.add(kb);
 
     // 5. Ergonomic chair behind desk
@@ -876,7 +1371,7 @@ export function buildColmenaOffice(
           })
         )
       );
-      plateMesh.position.set(0, 0.79, 0.3);
+      plateMesh.position.set(0, 0.79, 0.38);
       plateMesh.rotation.x = -1.15;
       group.add(plateMesh);
       const noteMesh = new THREE.Mesh(
@@ -890,10 +1385,27 @@ export function buildColmenaOffice(
           })
         )
       );
-      noteMesh.position.set(0.66, 1.02, 0.12);
+      noteMesh.position.set(1.0, 1.02, 0.12);
       noteMesh.rotation.set(-0.35, -0.3, 0);
       group.add(noteMesh);
       drawLabDesk(labelIdx, null);
+    }
+
+    if (labelIdx !== undefined) {
+      registerInfo(group, {
+        title: `PUESTO ${labelIdx + 1}`,
+        section: 'Puesto de trabajo del laboratorio',
+        description: 'Aquí se muestra quién trabaja en este puesto y la tarea que tiene asignada.',
+        lines: () => {
+          const e = labDeskEntries[labelIdx];
+          return e ? [`Agente: ${e.name}`, `Tarea: ${e.task.trim() || 'sin tarea'}`] : ['Puesto libre'];
+        },
+        images: () => {
+          const t = labDeskTex[labelIdx];
+          return t ? [t.plate.ctx.canvas.toDataURL('image/png'), t.note.ctx.canvas.toDataURL('image/png')] : [];
+        },
+        empty: () => !labDeskEntries[labelIdx],
+      });
     }
 
     scene.add(group);
@@ -915,18 +1427,178 @@ export function buildColmenaOffice(
       metalness: 0.6,
     })
   );
-  // Servidores de ejecución y almacenamiento en el lateral izquierdo del laboratorio expandido
-  const LAB_RACK_X = -22.5;
-  const labRackZs = [-5.0, -3.65, -2.3, -0.95, 0.4, 1.75, 3.1, 4.45];
-  labRackZs.forEach((rz) => buildRackAt(LAB_RACK_X, rz, Math.PI / 2, serverFaceMat, darkMetalMat));
-  addSign('EJECUCIÓN', LAB_RACK_X + 0.5, 3.0, -2.975, Math.PI / 2, 4.6, '#22d3ee');
-  addSign('ALMACENAMIENTO', LAB_RACK_X + 0.5, 3.0, 2.425, Math.PI / 2, 4.6, '#f59e0b');
+  // =====================================================================
+  // Laboratorio (coordenadas locales: x -28.5..1.5, z -6.4..6.0). Puerta al pasillo en x = -13.5.
+  // =====================================================================
+  // Pantallas de rendimiento del equipo (pared norte, a ambos lados de la puerta y de los tableros)
+  addInfoScreen(scene, -23.2, 2.3, -6.3, 0, 4.4, 2.3, 'RENDIMIENTO DEL EQUIPO', '#22d3ee', (g, x, y, w, h) => {
+    const ag = officeStats.agents;
+    const working = ag.filter((a) => a.status === 'working').length;
+    drawKpis(g, x, y, w, h * 0.3, [
+      ['AGENTES', String(ag.length), '#38bdf8'],
+      ['TRABAJANDO', String(working), '#10b981'],
+      ['COMPLETADAS', String(officeStats.stages.completed), '#a78bfa'],
+      ['CIERRE', closeRate() + '%', '#f59e0b'],
+    ]);
+    const maxDone = Math.max(1, ...ag.map((a) => a.done));
+    drawBars(
+      g,
+      x,
+      y + h * 0.36,
+      w,
+      h * 0.64,
+      ag.map((a) => ({ label: a.name, value: a.done, color: statusColor(a.status), text: `${a.done}✓ ${a.active}▶` })),
+      maxDone
+    );
+  });
+  addInfoScreen(scene, -4.3, 2.3, -6.3, 0, 3.8, 2.3, 'FLUJO DE TAREAS', '#10b981', (g, x, y, w, h) => {
+    const maxV = Math.max(1, ...STAGE_META.map(([k]) => officeStats.stages[k]));
+    drawBars(
+      g,
+      x,
+      y,
+      w,
+      h,
+      STAGE_META.map(([k, label, color]) => ({ label, value: officeStats.stages[k], color })),
+      maxV
+    );
+  });
+  // Librerías vacías: se llenan con cada proyecto y tarea completada
+  addBookcase(scene, -26.9, -6.15, 0, 2.4, 2.8);
+  addBookcase(scene, 0.1, -6.15, 0, 2.4, 2.8);
+
+  // Cuatro estaciones temáticas sobre la pared oeste: desarrollo, IA, marketing y trabajo
+  const podChairAt = (x: number, z: number, yaw: number) => {
+    const chair = new THREE.Group();
+    chair.position.set(x, 0, z);
+    chair.rotation.y = yaw;
+    const seat = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.56, 0.08, 0.54)), chairMat);
+    seat.position.y = 0.44;
+    const back = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.52, 0.62, 0.08)), chairMat);
+    back.position.set(0, 0.78, -0.26);
+    const stem = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.04, 0.05, 0.36, 8)), brushedAlumMat);
+    stem.position.y = 0.22;
+    const base = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 6)), darkMetalMat);
+    base.position.y = 0.04;
+    chair.add(seat, back, stem, base);
+    scene.add(chair);
+  };
+  const buildPod = (z: number, kind: 'dev' | 'ia' | 'mkt' | 'work') => {
+    const desk = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.8, 0.07, 2.2)), deskTopMat);
+    desk.position.set(-27.9, 0.74, z);
+    desk.castShadow = true;
+    scene.add(desk);
+    [-0.95, 0.95].forEach((dz) => {
+      const leg = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.7, 0.72, 0.07)), brushedAlumMat);
+      leg.position.set(-27.9, 0.36, z + dz);
+      scene.add(leg);
+    });
+    podChairAt(-26.8, z, -Math.PI / 2);
+    const top = 0.78;
+    if (kind === 'dev') {
+      const lap = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.3, 0.02, 0.42)), darkMetalMat);
+      lap.position.set(-27.75, top + 0.01, z - 0.4);
+      const lapScr = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.02, 0.28, 0.4)), darkMetalMat);
+      lapScr.position.set(-27.92, top + 0.15, z - 0.4);
+      lapScr.rotation.z = -0.15;
+      const kb = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.2, 0.02, 0.5)), darkMetalMat);
+      kb.position.set(-27.6, top + 0.01, z + 0.3);
+      scene.add(lap, lapScr, kb);
+    } else if (kind === 'ia') {
+      const ped = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.16, 0.2, 0.1, 16)), darkMetalMat);
+      ped.position.set(-27.9, top + 0.05, z);
+      const orb = new THREE.Mesh(
+        trackGeo(new THREE.IcosahedronGeometry(0.24, 1)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0xa78bfa, emissiveIntensity: 0.9, wireframe: true }))
+      );
+      orb.position.set(-27.9, top + 0.42, z);
+      spinners.push(orb);
+      scene.add(ped, orb);
+    } else if (kind === 'mkt') {
+      const horn = new THREE.Mesh(
+        trackGeo(new THREE.CylinderGeometry(0.2, 0.05, 0.36, 14)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.4, metalness: 0.3 }))
+      );
+      horn.rotation.z = Math.PI / 2;
+      horn.position.set(-27.8, top + 0.22, z - 0.4);
+      const notes = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.2, 0.03, 0.2)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xfde047, roughness: 0.8 }))
+      );
+      notes.position.set(-27.7, top + 0.02, z + 0.5);
+      scene.add(horn, notes);
+    } else {
+      const clip = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.28, 0.02, 0.4)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.7 }))
+      );
+      clip.position.set(-27.7, top + 0.01, z - 0.4);
+      const folders = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.3, 0.12, 0.4)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.6 }))
+      );
+      folders.position.set(-27.95, top + 0.06, z + 0.5);
+      const mug = new THREE.Mesh(
+        trackGeo(new THREE.CylinderGeometry(0.06, 0.05, 0.1, 12)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 }))
+      );
+      mug.position.set(-27.6, top + 0.05, z + 0.1);
+      scene.add(clip, folders, mug);
+    }
+  };
+  buildPod(-4.5, 'dev');
+  buildPod(-1.5, 'ia');
+  buildPod(1.5, 'mkt');
+  buildPod(4.5, 'work');
+  addInfoScreen(scene, -28.4, 2.2, -4.5, Math.PI / 2, 2.8, 1.5, 'DESARROLLO', '#38bdf8', (g, x, y, w, h) => {
+    drawList(g, x, y, w, h, officeStats.inDevTitles, '#38bdf8', 'Sin tareas en desarrollo');
+  });
+  addInfoScreen(scene, -28.4, 2.2, -1.5, Math.PI / 2, 2.8, 1.5, 'IA · MODELOS', '#a78bfa', (g, x, y, w, h) => {
+    const ag = officeStats.agents;
+    const maxT = Math.max(1, ...ag.map((a) => a.tokens));
+    drawBars(
+      g,
+      x,
+      y,
+      w,
+      h,
+      ag.map((a) => ({ label: a.name, value: a.tokens, color: '#a78bfa', text: a.tokens.toLocaleString('es') + ' tk' })),
+      maxT
+    );
+  });
+  addInfoScreen(scene, -28.4, 2.2, 1.5, Math.PI / 2, 2.8, 1.5, 'MARKETING · ENTREGAS', '#f43f5e', (g, x, y, w, h) => {
+    drawBars(
+      g,
+      x,
+      y,
+      w,
+      h,
+      officeStats.projects.map((p) => ({
+        label: p.name,
+        value: p.done,
+        color: '#f43f5e',
+        text: `${p.done}/${p.total}`,
+      })),
+      Math.max(1, ...officeStats.projects.map((p) => p.total))
+    );
+  });
+  addInfoScreen(scene, -28.4, 2.2, 4.5, Math.PI / 2, 2.8, 1.5, 'TRABAJO · PENDIENTES', '#f59e0b', (g, x, y, w, h) => {
+    drawList(g, x, y, w, h, officeStats.backlogTitles, '#f59e0b', 'Backlog vacío');
+  });
+
+  // Rincón de descanso del laboratorio (extremo este)
+  addRug(scene, -0.2, 0.0, 4.6, 7.0, 0x0f2a43, 0x22d3ee);
+  addSofa(scene, 1.0, -2.2, -Math.PI / 2, 2.8, 0x155e75);
+  addSofa(scene, 1.0, 2.6, -Math.PI / 2, 2.8, 0x155e75);
+  addCoffeeTable(scene, -0.6, 0.2, 0.9, 1.8);
+  addFloorLamp(scene, -2.4, 0.2);
+  addFloorLamp(scene, -25.0, 5.4);
 
   // 2 tableros grandes: entregar la tarea terminada y tomar la nueva
   const labBoardXs = [-17.5, -9.5];
   const labBoardTitles = ['ENTREGAR · EN CURSO', 'TOMAR TAREA · BACKLOG'];
   const labBoardColors = ['#10b981', '#f59e0b'];
-  const labBoards = labBoardXs.map((bx) => {
+  const labBoards = labBoardXs.map((bx, bi) => {
     const ct = makeCanvasTex(1024, 608);
     const frame = new THREE.Mesh(
       trackGeo(new THREE.BoxGeometry(BOARD_W_LAB + 0.16, BOARD_H_LAB + 0.16, 0.08)),
@@ -949,6 +1621,16 @@ export function buildColmenaOffice(
     );
     mesh.position.set(bx, 1.9, -6.28 + 0.045);
     scene.add(mesh);
+    registerInfo(mesh, {
+      title: labBoardTitles[bi],
+      section: 'Tablero del laboratorio',
+      description:
+        bi === 0
+          ? 'Aquí se entregan las tareas terminadas: lista de tareas en curso.'
+          : 'Aquí se toman nuevas tareas: lista del backlog pendiente.',
+      lines: () => (bi === 0 ? labBoardData.inProgress : labBoardData.backlog),
+      empty: () => (bi === 0 ? labBoardData.inProgress : labBoardData.backlog).length === 0,
+    });
     return ct;
   });
   let labBoardData = { inProgress: [] as string[], backlog: [] as string[] };
@@ -1004,7 +1686,8 @@ export function buildColmenaOffice(
     drawLabBoards();
   };
   const setLabDesks = (entries: Array<{ name: string; task: string } | null>) => {
-    for (let i = 0; i < 9; i++) drawLabDesk(i, entries[i] ?? null);
+    labDeskEntries = entries;
+    for (let i = 0; i < RAW_WORKSTATION_SLOTS.length; i++) drawLabDesk(i, entries[i] ?? null);
   };
 
 
@@ -1060,7 +1743,7 @@ export function buildColmenaOffice(
   scene.add(baseboard);
 
   // 2. TABLEROS DE PROYECTOS en la pared del fondo (3 tableros grandes, clicables)
-  const BOARD_W = 3.2;
+  const BOARD_W = 3.0;
   const BOARD_H = 1.9;
   const BOARD_Y = 1.9;
   const BOARD_Z = -6.28;
@@ -1069,7 +1752,7 @@ export function buildColmenaOffice(
   const BOARD_HEAD = 96;
   const BOARD_ROW = 84;
   const BOARD_ROWS = 6;
-  const boardXs = [-3.5, 0.2, 3.9];
+  const boardXs = [-3.3, 0.2, 3.7];
   let projectList: BoardProject[] = [];
   let selectedName: string | null = null;
 
@@ -1113,6 +1796,13 @@ export function buildColmenaOffice(
     );
     tray.position.set(bx, BOARD_Y - BOARD_H / 2 - 0.1, BOARD_Z + 0.08);
     scene.add(tray);
+    registerInfo(mesh, {
+      title: `TABLERO DE PROYECTOS ${bi + 1}`,
+      section: 'Oficina de Sheldon',
+      description: 'Cada fila es un proyecto con su avance. Haz clic en una fila para ver su detalle y tickets.',
+      lines: () => projectList.map((p) => `${p.name}: ${p.done}/${p.total} tareas`),
+      empty: () => projectList.length === 0,
+    });
     return { ctx, tex, mesh };
   });
 
@@ -1203,9 +1893,19 @@ export function buildColmenaOffice(
     scene.add(bc);
     bookcaseUnits.push(bc);
   };
-  buildBookcase(-5.5, -3.2, Math.PI / 2);
-  buildBookcase(-5.5, 1.6, Math.PI / 2);
+  buildBookcase(-5.5, -4.55, Math.PI / 2);
+  buildBookcase(-5.5, -0.9, Math.PI / 2);
+  buildBookcase(-5.5, 2.75, Math.PI / 2);
   buildBookcase(5.95, -3.2, -Math.PI / 2);
+  bookcaseUnits.forEach((bc, i) =>
+    registerInfo(bc, {
+      title: `LIBRERO DE PROYECTOS ${i + 1}`,
+      section: 'Oficina de Sheldon',
+      description: 'Aquí se archiva un libro por cada proyecto de la gestión.',
+      lines: () => [`Proyectos archivados: ${projectList.length}`],
+      empty: () => projectList.length === 0,
+    })
+  );
 
   const BOOKS_PER_ROW = 10;
   const BOOK_ROWS = 4;
@@ -1307,6 +2007,15 @@ export function buildColmenaOffice(
   );
   holoOrb.position.set(1.9, 0.94, -1.45);
   scene.add(holoOrb);
+
+  registerInfo([ctoTop, ctoBezel, ctoDisplay, ctoKeyboard], {
+    title: 'PC DE SHELDON (CTO)',
+    section: 'Oficina de Sheldon',
+    description: 'Aquí se muestra el estado y la tarea actual del CTO, que revisa y aprueba el trabajo del equipo.',
+    lines: () => agentLines(officeStats.agents.find((a) => a.isCTO)),
+    images: () => [],
+    empty: () => !officeStats.agents.some((a) => a.isCTO),
+  });
 
   // 5. SOFÁ en el costado derecho, donde descansa el CTO (mira hacia el centro de la sala)
   const brownLeatherMat = trackMat(
@@ -1635,7 +2344,7 @@ export function buildColmenaOffice(
       })
     )
   );
-  zoneCBar.position.set(9.45, 0.03, 6.85);
+  zoneCBar.position.set(9.45, 0.03, 5.9);
   scene.add(zoneCBar);
 
   // Alfombra gaming bajo la zona de consolas y pufs
@@ -1672,25 +2381,26 @@ export function buildColmenaOffice(
   breakfastBar.position.set(9.5, 0, -5.2);
 
   // Mostrador / Barra principal larga
-  const counterBase = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(6.6, 0.94, 0.92)),
-    darkCabinetMat
-  );
-  counterBase.position.y = 0.47;
-  counterBase.castShadow = true;
-  breakfastBar.add(counterBase);
-
-  const counterTop = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(6.75, 0.06, 0.98)),
-    whiteMarbleMat
-  );
-  counterTop.position.y = 0.97;
-  counterTop.castShadow = true;
-  breakfastBar.add(counterTop);
+  // Barra PARTIDA: queda libre el hueco de la puerta; café a la izquierda, comidas a la derecha
+  [-3.5, 3.5].forEach((cxOff) => {
+    const counterBase = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(4.0, 0.94, 0.92)),
+      darkCabinetMat
+    );
+    counterBase.position.set(cxOff, 0.47, 0);
+    counterBase.castShadow = true;
+    const counterTop = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(4.15, 0.06, 0.98)),
+      whiteMarbleMat
+    );
+    counterTop.position.set(cxOff, 0.97, 0);
+    counterTop.castShadow = true;
+    breakfastBar.add(counterBase, counterTop);
+  });
 
   // A) Máquina de café espresso comercial (lado izquierdo de la barra)
   const espressoMachine = new THREE.Group();
-  espressoMachine.position.set(-2.0, 1.0, 0);
+  espressoMachine.position.set(-4.1, 1.0, 0);
 
   const machineBody = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(0.85, 0.52, 0.55)),
@@ -1735,7 +2445,7 @@ export function buildColmenaOffice(
 
   // Molinillo de café profesional
   const grinder = new THREE.Group();
-  grinder.position.set(-1.15, 1.0, -0.05);
+  grinder.position.set(-3.1, 1.0, -0.05);
   const grinderBase = new THREE.Mesh(
     trackGeo(new THREE.CylinderGeometry(0.1, 0.12, 0.38, 12)),
     darkMetalMat
@@ -1756,13 +2466,13 @@ export function buildColmenaOffice(
       trackGeo(new THREE.CylinderGeometry(0.045, 0.038, 0.08, 10)),
       trackMat(new THREE.MeshStandardMaterial({ color, roughness: 0.25 }))
     );
-    cup.position.set(-0.6 + i * 0.16, 1.04, 0.26);
+    cup.position.set(-2.5 + i * 0.16, 1.04, 0.26);
     breakfastBar.add(cup);
   });
 
   // B) Zona de preparación de desayuno: tostadora y tostadas
   const toaster = new THREE.Group();
-  toaster.position.set(0.35, 1.0, 0.05);
+  toaster.position.set(2.0, 1.0, 0.05);
   const toasterBody = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(0.34, 0.24, 0.22)),
     brushedAlumMat
@@ -1784,7 +2494,7 @@ export function buildColmenaOffice(
 
   // Dispensador de zumo de naranja natural
   const juiceDispenser = new THREE.Group();
-  juiceDispenser.position.set(1.15, 1.0, 0.02);
+  juiceDispenser.position.set(2.9, 1.0, 0.02);
   const juiceBase = new THREE.Mesh(
     trackGeo(new THREE.CylinderGeometry(0.14, 0.16, 0.1, 14)),
     darkMetalMat
@@ -1812,7 +2522,7 @@ export function buildColmenaOffice(
 
   // Cesta de bollería y croissants de desayuno
   const pastryTray = new THREE.Group();
-  pastryTray.position.set(1.95, 1.0, 0.1);
+  pastryTray.position.set(3.9, 1.0, 0.1);
   const trayMesh = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(0.55, 0.04, 0.35)),
     oakLegMat
@@ -1836,14 +2546,29 @@ export function buildColmenaOffice(
     trackGeo(new THREE.CylinderGeometry(0.16, 0.16, 0.02, 16)),
     trackMat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 }))
   );
-  bPlate.position.set(2.7, 1.01, 0.05);
+  bPlate.position.set(4.8, 1.01, 0.05);
   // Yema de huevo
   const eggYolk = new THREE.Mesh(
     trackGeo(new THREE.SphereGeometry(0.035, 10, 8)),
     trackMat(new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.3 }))
   );
-  eggYolk.position.set(2.7, 1.035, 0.05);
+  eggYolk.position.set(4.8, 1.035, 0.05);
   breakfastBar.add(bPlate, eggYolk);
+
+  // Almuerzo: microondas (izquierda) y platos calientes con campana (derecha)
+  const microwave = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.62, 0.36, 0.45)), brushedAlumMat);
+  microwave.position.set(-5.0, 1.18, 0);
+  const mwDoor = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.4, 0.26, 0.02)), darkMetalMat);
+  mwDoor.position.set(-5.08, 1.18, 0.23);
+  breakfastBar.add(microwave, mwDoor);
+  [2.45, 3.4].forEach((hx) => {
+    const cloche = new THREE.Mesh(
+      trackGeo(new THREE.SphereGeometry(0.2, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)),
+      brushedAlumMat
+    );
+    cloche.position.set(hx, 1.0, 0.3);
+    breakfastBar.add(cloche);
+  });
 
   scene.add(breakfastBar);
 
@@ -1899,6 +2624,7 @@ export function buildColmenaOffice(
       [-0.85, 0, Math.PI / 2],
       [0, 0.85, Math.PI],
       [0.85, 0, -Math.PI / 2],
+      [0, -0.85, 0],
     ];
 
     chairPositions.forEach(([cx, cz, yaw]) => {
@@ -1940,6 +2666,47 @@ export function buildColmenaOffice(
 
   buildDiningTable(7.5, -2.2);
   buildDiningTable(11.5, -2.2);
+  buildDiningTable(7.5, 1.4);
+  buildDiningTable(11.5, 1.4);
+
+  // Literas con camas a mano izquierda y derecha de la zona de descanso
+  const bunkFrameMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.5 }));
+  const mattressMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.9 }));
+  const buildBunk = (bx: number, bz: number, blanket: number[]) => {
+    const bunk = new THREE.Group();
+    bunk.position.set(bx, 0, bz);
+    [-0.5, 0.5].forEach((px) => {
+      [-1.0, 1.0].forEach((pz) => {
+        const post = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.07, 1.95, 0.07)), bunkFrameMat);
+        post.position.set(px, 0.975, pz);
+        post.castShadow = true;
+        bunk.add(post);
+      });
+    });
+    [0.42, 1.38].forEach((by, i) => {
+      const slab = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.0, 0.07, 2.05)), bunkFrameMat);
+      slab.position.set(0, by, 0);
+      const mattress = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.94, 0.14, 1.98)), mattressMat);
+      mattress.position.set(0, by + 0.1, 0);
+      mattress.receiveShadow = true;
+      const cover = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.96, 0.05, 1.2)),
+        trackMat(new THREE.MeshStandardMaterial({ color: blanket[i % blanket.length], roughness: 0.85 }))
+      );
+      cover.position.set(0, by + 0.19, 0.4);
+      const pillow = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.6, 0.1, 0.34)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }))
+      );
+      pillow.position.set(0, by + 0.22, -0.78);
+      bunk.add(slab, mattress, cover, pillow);
+    });
+    scene.add(bunk);
+  };
+  buildBunk(4.2, -2.4, [0x2563eb, 0x0ea5e9]);
+  buildBunk(4.2, 0.4, [0x16a34a, 0x84cc16]);
+  buildBunk(14.7, -2.4, [0xdb2777, 0xf43f5e]);
+  buildBunk(14.7, 0.4, [0x7c3aed, 0xa78bfa]);
 
   // -------------------------------------------------------------------------
   // 3. ZONA GAMING: 3 TELEVISORES, CONSOLAS (XBOX, PLAY, RIG) Y 9 PUFS (3 POR TV)
@@ -1952,7 +2719,7 @@ export function buildColmenaOffice(
     poufColors: [number, number, number]
   ) => {
     const station = new THREE.Group();
-    station.position.set(stationX, 0, 5.9);
+    station.position.set(stationX, 0, 5.55);
 
     // Mueble bajo soporte para la consola y mandos
     const stand = new THREE.Mesh(
@@ -2103,7 +2870,7 @@ export function buildColmenaOffice(
 
     poufOffsets.forEach(([px, pz, rotY], i) => {
       const poufGroup = new THREE.Group();
-      poufGroup.position.set(stationX + px, 0, 5.9 + pz);
+      poufGroup.position.set(stationX + px, 0, 5.55 + pz);
       poufGroup.rotation.y = rotY;
 
       // Base acolchada circular del puf
@@ -2151,46 +2918,8 @@ export function buildColmenaOffice(
   buildGamingStation(12.2, 'space', 'hybrid', [0x7c3aed, 0xe07a5f, 0x475569]);
 
   // -------------------------------------------------------------------------
-  // 4. PLANTAS DECORATIVAS Y LÁMPARA AMBIENTAL
+  // 4. LÁMPARA AMBIENTAL
   // -------------------------------------------------------------------------
-  const buildIndoorPlant = (px: number, pz: number, plantHeight: number) => {
-    const pot = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.24, 0.18, 0.46, 16)),
-      trackMat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }))
-    );
-    pot.position.set(px, 0.23, pz);
-    pot.castShadow = true;
-    scene.add(pot);
-
-    const trunk = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.03, 0.04, plantHeight, 8)),
-      oakLegMat
-    );
-    trunk.position.set(px, 0.46 + plantHeight / 2, pz);
-    scene.add(trunk);
-
-    const leafGeo = trackGeo(new THREE.SphereGeometry(0.26, 8, 8));
-    const leafMat = trackMat(
-      new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.6 })
-    );
-    [
-      [0, plantHeight, 0, 1.0],
-      [0.15, plantHeight * 0.8, 0.1, 0.85],
-      [-0.14, plantHeight * 0.7, -0.12, 0.8],
-      [0.12, plantHeight * 0.55, -0.15, 0.75],
-    ].forEach(([lx, ly, lz, scale]) => {
-      const cluster = new THREE.Mesh(leafGeo, leafMat);
-      cluster.scale.set(scale, scale * 0.75, scale);
-      cluster.position.set(px + lx, 0.46 + ly, pz + lz);
-      scene.add(cluster);
-    });
-  };
-
-  buildIndoorPlant(5.4, -4.8, 0.95);
-  buildIndoorPlant(13.6, -4.8, 1.1);
-  buildIndoorPlant(13.6, 6.0, 1.15);
-  buildIndoorPlant(5.4, 6.0, 0.9);
-
   // Lámpara de pie moderna
   const floorLamp = new THREE.Group();
   floorLamp.position.set(13.5, 0, 1.0);
@@ -2224,7 +2953,7 @@ export function buildColmenaOffice(
   // BALANCED ZONE LIGHTING RIG (<= 2 Shadow Casters + Distinct Zone Moods)
   // =========================================================================
   // =========================================================================
-  // OFICINA DEL SENIOR FULL-STACK
+  // OFICINA DEL LEONARD (SENIOR FULL-STACK)
   // =========================================================================
   scene = seniorGroup;
   const seniorFloor = new THREE.Mesh(
@@ -2387,6 +3116,22 @@ export function buildColmenaOffice(
   sDesk.add(sChair);
   scene.add(sDesk);
 
+  registerInfo(sDesk, {
+    title: 'PC DE LEONARD (FULL-STACK)',
+    section: 'Oficina de Leonard',
+    description: 'Aquí se muestra el estado y la tarea actual del desarrollador full-stack.',
+    lines: () => agentLines(officeStats.agents.find((a) => !a.isCTO && /full.?stack/i.test(a.title))),
+    images: () => [],
+    empty: () => !officeStats.agents.some((a) => !a.isCTO && /full.?stack/i.test(a.title)),
+  });
+  registerInfo([tvFrame, tvScreenMesh], {
+    title: 'TV DE PROYECTOS',
+    section: 'Oficina de Leonard',
+    description: 'Aquí se lista cada proyecto de la gestión con su avance.',
+    lines: () => officeStats.projects.map((p) => `${p.name}: ${p.done}/${p.total} tareas`),
+    empty: () => officeStats.projects.length === 0,
+  });
+
   // Puf para descansar
   const sPouf = new THREE.Mesh(
     trackGeo(new THREE.CylinderGeometry(0.55, 0.6, 0.45, 20)),
@@ -2402,13 +3147,9 @@ export function buildColmenaOffice(
   sPoufTop.position.set(3.8, 0.48, 1.8);
   scene.add(sPoufTop);
 
-  // 2 servidores de almacenamiento con todo lo de cada proyecto (pared izquierda)
-  buildRackAt(-5.45, -3.6, Math.PI / 2, serverFaceMat, darkMetalMat);
-  buildRackAt(-5.45, -2.2, Math.PI / 2, serverFaceMat, darkMetalMat);
-  addSign('ALMACENAMIENTO · PROYECTOS', -4.95, 3.0, -2.9, Math.PI / 2, 3.4, '#a78bfa');
+  // Librero vacío en la pared izquierda (los servidores de proyectos ahora están en el Data Center)
+  addBookcase(scene, -5.55, -2.9, Math.PI / 2, 3.4, 2.8);
 
-  buildIndoorPlant(-4.6, -5.3, 1.0);
-  buildIndoorPlant(4.6, -5.3, 0.9);
 
   // ---- Tecnología e IA: escritorio ----
   buildFigure(sDesk, -1.9, 0.8, -0.35, 1.3, 'robot', 0x38bdf8, 0.3);
@@ -2723,6 +3464,13 @@ export function buildColmenaOffice(
   );
   mlBoard.position.set(4.1, 2.1, -ROOM_D / 2 + 0.14);
   scene.add(mlFrame, mlBoard);
+  registerInfo([mlFrame, mlBoard], {
+    title: 'TABLERO DE IA',
+    section: 'Oficina de Leonard',
+    description: 'Aquí se muestra el uso de modelos de IA del equipo.',
+    lines: () => officeStats.agents.map((a) => `${a.name}: ${a.tokens.toLocaleString('es')} tokens ahorrados hoy`),
+    empty: () => officeStats.agents.length === 0,
+  });
   addSign('</> IA', -4.0, 2.4, -ROOM_D / 2 + 0.16, 0, 2.0, '#22d3ee');
 
   const seniorLight = new THREE.PointLight(0xc4b5fd, 12, 15, 1.5);
@@ -2730,7 +3478,7 @@ export function buildColmenaOffice(
   seniorGroup.add(seniorLight);
 
   // =========================================================================
-  // SALA DE JUNTAS: al lado de la Oficina del Senior en el ala norte
+  // SALA DE JUNTAS: al lado de la Oficina de Leonard en el ala norte
   // =========================================================================
   scene = rootScene;
   const BR = BOARDROOM;
@@ -2778,34 +3526,10 @@ export function buildColmenaOffice(
   brBar.position.set(BR.cx, 0.025, BR.cz + BR.d / 2 - 0.25);
   scene.add(brBar);
 
-  // Libreros de archivo de actas de juntas generales (pared norte/este)
-  const brBookcaseMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.2 }));
-  const brLedgerColors = [0x1e3a8a, 0x155e75, 0x0f766e, 0x334155, 0x0369a1];
-  [-4.0, 4.0].forEach((bx) => {
-    const bookcase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.6, 3.2, 0.9)), brBookcaseMat);
-    bookcase.position.set(BR.cx + bx, 1.6, BR.cz - BR.d / 2 + 0.55);
-    bookcase.castShadow = true;
-    scene.add(bookcase);
-
-    // Carpetas / libros encuadernados de "ACTAS DE JUNTA GENERAL"
-    for (let row = 0; row < 4; row++) {
-      for (let k = 0; k < 9; k++) {
-        const ledgerMat = trackMat(
-          new THREE.MeshStandardMaterial({
-            color: brLedgerColors[(row * 9 + k) % brLedgerColors.length],
-            roughness: 0.3,
-          })
-        );
-        const binder = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.32, 0.46, 0.1)), ledgerMat);
-        binder.position.set(
-          BR.cx + bx - 1.45 + k * 0.36,
-          0.65 + row * 0.72,
-          BR.cz - BR.d / 2 + 0.62
-        );
-        scene.add(binder);
-      }
-    }
-  });
+  // 4 libreros en la pared frente a la puerta (norte); nacen vacíos y se llenan con la gestión
+  [-4.8, -1.6, 1.6, 4.8].forEach((bx) =>
+    addBookcase(scene, BR.cx + bx, BR.cz - BR.d / 2 + 0.3, 0, 3.1, 3.2)
+  );
 
   // Mesa de snacks y cafetería gourmet de la Sala de Juntas (pared oeste)
   const snackBarMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.5 }));
@@ -2838,6 +3562,33 @@ export function buildColmenaOffice(
     }
   });
 
+  // Libretas para apuntes y bolígrafos sobre la mesa de la pared izquierda (oeste)
+  const noteColors = [0x2563eb, 0xf59e0b, 0x10b981, 0xec4899, 0x8b5cf6, 0x06b6d4];
+  noteColors.forEach((c, i) => {
+    const nb = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(0.3, 0.025, 0.42)),
+      trackMat(new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }))
+    );
+    nb.position.set(BR.cx - BR.w / 2 + 0.55 + (i % 2) * 0.12, 0.915 + Math.floor(i / 2) * 0.03, BR.cz + 1.55 + (i % 3) * 0.28);
+    nb.rotation.y = (i - 2.5) * 0.08;
+    scene.add(nb);
+  });
+  const penCup = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.06, 0.05, 0.12, 12)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.4 }))
+  );
+  penCup.position.set(BR.cx - BR.w / 2 + 0.95, 0.96, BR.cz + 2.2);
+  scene.add(penCup);
+  [-0.025, 0, 0.025].forEach((o, i) => {
+    const pen = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.008, 0.008, 0.2, 6)),
+      trackMat(new THREE.MeshStandardMaterial({ color: [0xef4444, 0x3b82f6, 0x111827][i], roughness: 0.5 }))
+    );
+    pen.position.set(BR.cx - BR.w / 2 + 0.95 + o, 1.08, BR.cz + 2.2);
+    pen.rotation.z = o * 8;
+    scene.add(pen);
+  });
+
   // Pantalla de presentación en la pared este
   const brScreenCt = makeCanvasTex(1280, 560);
   {
@@ -2868,6 +3619,13 @@ export function buildColmenaOffice(
   );
   brScreen.position.set(BR.cx + BR.w / 2 - 0.12, 2.0, BR.cz);
   brScreen.rotation.y = -Math.PI / 2;
+  registerInfo(brScreen, {
+    title: 'PANTALLA DE PRESENTACIÓN',
+    section: 'Sala de juntas',
+    description: 'Aquí se proyecta el material de las reuniones del equipo.',
+    lines: () => officeStats.agents.map((a) => `${a.name}: ${a.status}`),
+    empty: () => officeStats.agents.length === 0,
+  });
   scene.add(brScreen);
   const brLight = new THREE.PointLight(0xbfdbfe, 14, 18, 1.5);
   brLight.position.set(BR.cx, 4.0, BR.cz);
@@ -2876,8 +3634,8 @@ export function buildColmenaOffice(
   // Mesa y sillas: se reconstruyen según el número de agentes (una silla por agente)
   const brSeatsGroup = new THREE.Group();
   scene.add(brSeatsGroup);
-  const brTableGeo = trackGeo(new THREE.BoxGeometry(1, 0.08, 1.7));
-  const brLegGeo = trackGeo(new THREE.BoxGeometry(0.1, 0.72, 1.3));
+  const brTableGeo = trackGeo(new THREE.BoxGeometry(1, 0.08, 2.2));
+  const brLegGeo = trackGeo(new THREE.BoxGeometry(0.1, 0.72, 1.8));
   const brTableMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.25, metalness: 0.3 }));
   const brHeadChairMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.6 }));
   const brSeatGeo = trackGeo(new THREE.BoxGeometry(0.56, 0.08, 0.54));
@@ -2915,7 +3673,7 @@ export function buildColmenaOffice(
       brSeatsGroup.add(chair);
     });
   };
-  setBoardroomSeats(0);
+  setBoardroomSeats(BOARDROOM_SEATS);
 
   // =========================================================================
   // DATA CENTER CENTRALIZADO (Ala Sur, al frente de Sala de Juntas y al lado de Descanso)
@@ -2956,51 +3714,272 @@ export function buildColmenaOffice(
   dcVentS.position.z = DATACENTER.cz + DATACENTER.d / 2 - 0.3;
   dcGroup.add(dcVentN, dcVentS);
 
-  // FILAS DE SERVIDORES CENTRALIZADOS (Servidores de Cómputo, Almacenamiento y Clusters)
-  const rackTexture = createServerRackTexture(maxAnisotropy);
-  disposables.push(rackTexture);
-  const rackFrontMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      map: rackTexture,
-      emissiveMap: rackTexture,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.85,
-      roughness: 0.3,
-      metalness: 0.5,
-    })
-  );
-  const rackSideMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x0a0f18,
-      roughness: 0.4,
-      metalness: 0.8,
-    })
-  );
-  const rackMaterials = [rackSideMat, rackSideMat, rackSideMat, rackSideMat, rackFrontMat, rackSideMat];
-  const rackGeo = trackGeo(new THREE.BoxGeometry(1.0, 2.6, 1.1));
+  // =====================================================================
+  // DATA CENTER REAL: piso técnico, racks por columnas, pasillos fríos con contención,
+  // pasillo caliente central con bandeja de cables, unidades CRAC y seguridad.
+  // =====================================================================
+  const dcCX = DATACENTER.cx;
+  const dcCZ = DATACENTER.cz;
 
-  // 3 pasillos con racks de 42U para albergar toda la infraestructura del complejo
-  [-3.2, 0, 3.2].forEach((rackZOffset, rowIdx) => {
-    [-4.5, -3.0, -1.5, 0, 1.5, 3.0, 4.5].forEach((rackXOffset) => {
-      const rack = new THREE.Mesh(rackGeo, rackMaterials);
-      rack.position.set(DATACENTER.cx + rackXOffset, 1.42, DATACENTER.cz + rackZOffset);
-      if (rackZOffset > 0) rack.rotation.y = Math.PI;
+  // Piso técnico elevado: losetas de 60 cm con juntas y perforaciones
+  {
+    const ft = makeCanvasTex(256, 256);
+    const g = ft.ctx;
+    g.fillStyle = '#0b1522';
+    g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        const x0 = i * 128;
+        const y0 = j * 128;
+        g.fillStyle = (i + j) % 2 ? '#0d1a2b' : '#0a1220';
+        g.fillRect(x0 + 3, y0 + 3, 122, 122);
+        g.strokeStyle = '#223247';
+        g.lineWidth = 2;
+        g.strokeRect(x0 + 1.5, y0 + 1.5, 125, 125);
+        g.fillStyle = '#31475f';
+        [[8, 8], [120, 8], [8, 120], [120, 120]].forEach(([px, py]) => g.fillRect(x0 + px - 2, y0 + py - 2, 4, 4));
+      }
+    }
+    ft.tex.wrapS = ft.tex.wrapT = THREE.RepeatWrapping;
+    ft.tex.repeat.set(DATACENTER.w / 1.2, DATACENTER.d / 1.2);
+    ft.tex.needsUpdate = true;
+    dcFloorMat.map = ft.tex;
+    dcFloorMat.color.setHex(0xffffff);
+    dcFloorMat.needsUpdate = true;
+  }
+
+  // Texturas de frente de rack: cómputo (1U/2U), almacenamiento (bahías de disco) y red (puertos)
+  const makeRackFront = (kind: 'compute' | 'storage' | 'network') => {
+    const ct = makeCanvasTex(128, 512);
+    const g = ct.ctx;
+    const rnd = mulberry(kind === 'compute' ? 11 : kind === 'storage' ? 23 : 37);
+    g.fillStyle = '#080d16';
+    g.fillRect(0, 0, 128, 512);
+    g.fillStyle = '#1b2433';
+    g.fillRect(0, 0, 8, 512);
+    g.fillRect(120, 0, 8, 512);
+    const accent = kind === 'compute' ? ['#22d3ee', '#10b981'] : kind === 'storage' ? ['#f59e0b', '#a78bfa'] : ['#22c55e', '#38bdf8'];
+    let y = 8;
+    while (y < 496) {
+      const units = kind === 'storage' ? 2 : kind === 'network' ? 1 : rnd() < 0.3 ? 2 : 1;
+      const h = units * 11;
+      g.fillStyle = '#131c2b';
+      g.fillRect(10, y, 108, h - 2);
+      g.strokeStyle = '#273449';
+      g.lineWidth = 1;
+      g.strokeRect(10.5, y + 0.5, 107, h - 3);
+      if (kind === 'storage') {
+        for (let k = 0; k < 8; k++) {
+          g.fillStyle = '#0b1220';
+          g.fillRect(14 + k * 12, y + 3, 10, h - 8);
+          g.fillStyle = rnd() < 0.85 ? accent[0] : accent[1];
+          g.fillRect(17 + k * 12, y + h - 6, 4, 2);
+        }
+      } else if (kind === 'network') {
+        for (let k = 0; k < 16; k++) {
+          g.fillStyle = rnd() < 0.65 ? accent[rnd() < 0.5 ? 0 : 1] : '#0b1220';
+          g.fillRect(14 + k * 6.4, y + 3, 4, 5);
+        }
+      } else {
+        for (let k = 0; k < 6; k++) {
+          g.fillStyle = '#0b1220';
+          g.fillRect(14 + k * 10, y + 3, 7, h - 8);
+        }
+        g.fillStyle = accent[rnd() < 0.5 ? 0 : 1];
+        g.fillRect(104, y + 3, 3, 3);
+        g.fillRect(109, y + 3, 3, 3);
+      }
+      y += h;
+      if (rnd() < 0.08) y += 11;
+    }
+    ct.tex.needsUpdate = true;
+    return ct.tex;
+  };
+  const rackSideMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x0a0f18, roughness: 0.4, metalness: 0.8 }));
+  const rackFrontMats = (['compute', 'storage', 'network'] as const).map((k) => {
+    const tex = makeRackFront(k);
+    return trackMat(
+      new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.4, metalness: 0.5 })
+    );
+  });
+  const RACK_DEPTH = 1.1;
+  const RACK_WIDTH = 0.62;
+  const RACKS_PER_COL = 13;
+  const RACK_PITCH = 0.65;
+  const rackZ0 = dcCZ - 3.9 + RACK_WIDTH / 2;
+  const rackZMid = rackZ0 + ((RACKS_PER_COL - 1) * RACK_PITCH) / 2;
+  const rackGeo = trackGeo(new THREE.BoxGeometry(RACK_DEPTH, 2.6, RACK_WIDTH));
+  const dcColumns = [
+    { dx: -3.95, face: 1, kind: 0, label: 'EJECUCIÓN · CÓMPUTO', color: '#22d3ee', led: 0x22d3ee },
+    { dx: -1.55, face: -1, kind: 1, label: 'ALMACENAMIENTO · PROYECTOS', color: '#a78bfa', led: 0xa78bfa },
+    { dx: 1.55, face: 1, kind: 1, label: 'ALMACENAMIENTO · TICKETS', color: '#f59e0b', led: 0xf59e0b },
+    { dx: 3.95, face: -1, kind: 2, label: 'RESPALDO · RED', color: '#22c55e', led: 0x22c55e },
+  ];
+  dcColumns.forEach((col, ci) => {
+    const mats =
+      col.face === 1
+        ? [rackFrontMats[col.kind], rackSideMat, rackSideMat, rackSideMat, rackSideMat, rackSideMat]
+        : [rackSideMat, rackFrontMats[col.kind], rackSideMat, rackSideMat, rackSideMat, rackSideMat];
+    const ledMat = trackMat(new THREE.MeshStandardMaterial({ color: col.led, emissive: col.led, emissiveIntensity: 1.4 }));
+    for (let i = 0; i < RACKS_PER_COL; i++) {
+      const rz = rackZ0 + i * RACK_PITCH;
+      const rack = new THREE.Mesh(rackGeo, mats);
+      rack.position.set(dcCX + col.dx, 1.54, rz);
       rack.castShadow = true;
       rack.receiveShadow = true;
       dcGroup.add(rack);
-
-      // Indicadores LED estatus
-      const ledPillMat = trackMat(
-        new THREE.MeshStandardMaterial({
-          color: rowIdx === 0 ? 0x10b981 : rowIdx === 1 ? 0x00f0ff : 0xf59e0b,
-          emissive: rowIdx === 0 ? 0x10b981 : rowIdx === 1 ? 0x00f0ff : 0xf59e0b,
-          emissiveIntensity: 1.2,
-        })
-      );
-      const ledPill = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8)), ledPillMat);
-      ledPill.position.set(DATACENTER.cx + rackXOffset, 2.76, DATACENTER.cz + rackZOffset + (rackZOffset > 0 ? -0.52 : 0.52));
-      dcGroup.add(ledPill);
+      const led = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.03, 0.04, 0.3)), ledMat);
+      led.position.set(dcCX + col.dx + col.face * (RACK_DEPTH / 2 + 0.01), 2.78, rz);
+      dcGroup.add(led);
+      registerInfo(rack, {
+        title: `RACK ${'ABCD'[ci]}${i + 1}`,
+        section: col.label,
+        description: [
+          'Aquí se muestran las tareas que se están ejecutando.',
+          'Aquí se archiva todo lo de cada proyecto.',
+          'Aquí se almacenan los tickets de la gestión.',
+          'Aquí se respalda lo entregado.',
+        ][ci],
+        lines: () =>
+          ci === 0
+            ? [`Tareas en curso: ${officeStats.stages.in_dev + officeStats.stages.sheldon_review}`]
+            : ci === 1
+              ? officeStats.projects.map((p) => `${p.name}: ${p.done}/${p.total} tareas`)
+              : ci === 2
+                ? [`Tickets: ${totalTickets()}`, `Proyectos: ${officeStats.projects.length}`]
+                : [`Entregadas: ${officeStats.stages.completed}`],
+        images: () => [],
+        empty: () => (ci === 1 ? officeStats.projects.length === 0 : noTeamData()),
+      });
+    }
+    // Rótulo de la columna (colgante, mirando a la puerta)
+    addInfoScreen(dcGroup, dcCX + col.dx, 3.05, rackZ0 - 0.55, Math.PI, 2.1, 0.8, col.label, col.color, (g, x, y, w, h) => {
+      const item: [string, string, string] =
+        ci === 0
+          ? ['EN CURSO', String(officeStats.stages.in_dev + officeStats.stages.sheldon_review), col.color]
+          : ci === 1
+            ? ['PROYECTOS', String(officeStats.projects.length), col.color]
+            : ci === 2
+              ? ['TICKETS', String(totalTickets()), col.color]
+              : ['ENTREGADAS', String(officeStats.stages.completed), col.color];
+      drawKpis(g, x, y, w, h, [item]);
     });
+  });
+
+  // Contención de pasillo frío: techo y puerta de vidrio sobre cada pasillo frío
+  const dcGlassMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.16, roughness: 0.1, metalness: 0.3 })
+  );
+  const dcFrameMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4, metalness: 0.7 }));
+  const perfTex = makeCanvasTex(128, 512);
+  {
+    const g = perfTex.ctx;
+    g.fillStyle = '#06222e';
+    g.fillRect(0, 0, 128, 512);
+    g.fillStyle = '#22d3ee';
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 32; j++) g.fillRect(8 + i * 15, 6 + j * 16, 6, 6);
+    perfTex.tex.needsUpdate = true;
+  }
+  [-2.75, 2.75].forEach((dx) => {
+    const roof = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.35, 0.04, 8.9)), dcGlassMat);
+    roof.position.set(dcCX + dx, 2.78, rackZMid);
+    dcGroup.add(roof);
+    const door = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.3, 2.6, 0.04)), dcGlassMat);
+    door.position.set(dcCX + dx, 1.3, rackZ0 - 0.45);
+    dcGroup.add(door);
+    [-0.65, 0.65].forEach((fx) => {
+      const post = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.05, 2.6, 0.06)), dcFrameMat);
+      post.position.set(dcCX + dx + fx, 1.3, rackZ0 - 0.45);
+      dcGroup.add(post);
+    });
+    // Baldosas perforadas luminosas en el pasillo frío
+    const perf = new THREE.Mesh(
+      trackGeo(new THREE.PlaneGeometry(1.2, 8.7)),
+      trackMat(
+        new THREE.MeshStandardMaterial({
+          map: perfTex.tex,
+          emissiveMap: perfTex.tex,
+          emissive: 0xffffff,
+          emissiveIntensity: 0.7,
+          roughness: 0.4,
+        })
+      )
+    );
+    perf.rotation.x = -Math.PI / 2;
+    perf.position.set(dcCX + dx, 0.246, rackZMid);
+    dcGroup.add(perf);
+    // CRAC (aire de precisión) que alimenta el pasillo frío desde el extremo sur
+    const crac = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(1.2, 2.3, 0.9)),
+      trackMat(new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.4, metalness: 0.35 }))
+    );
+    crac.position.set(dcCX + dx, 1.4, dcCZ + 5.65);
+    crac.castShadow = true;
+    dcGroup.add(crac);
+    const cracVent = new THREE.Mesh(
+      trackGeo(new THREE.PlaneGeometry(1.0, 1.0)),
+      trackMat(new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.55, roughness: 0.5 }))
+    );
+    cracVent.rotation.y = Math.PI;
+    cracVent.position.set(dcCX + dx, 1.0, dcCZ + 5.65 - 0.455);
+    dcGroup.add(cracVent);
+  });
+
+  // Bandeja de cables aérea sobre el pasillo caliente (rieles, travesaños y haces de cables)
+  const trayLen = 9.2;
+  [-0.32, 0.32].forEach((rx) => {
+    const rail = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.04, 0.09, trayLen)), dcFrameMat);
+    rail.position.set(dcCX + rx, 3.2, rackZMid);
+    dcGroup.add(rail);
+  });
+  for (let i = 0; i < 19; i++) {
+    const rung = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.68, 0.03, 0.04)), dcFrameMat);
+    rung.position.set(dcCX, 3.17, rackZMid - trayLen / 2 + i * (trayLen / 18));
+    dcGroup.add(rung);
+  }
+  [0x38bdf8, 0xf59e0b, 0x22c55e, 0xe11d48].forEach((c, i) => {
+    const cable = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(0.07, 0.07, trayLen - 0.3)),
+      trackMat(new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }))
+    );
+    cable.position.set(dcCX - 0.24 + i * 0.16, 3.24, rackZMid);
+    dcGroup.add(cable);
+  });
+  // Luminarias lineales sobre el pasillo caliente
+  const stripMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xe0f2fe, emissiveIntensity: 1.1 }));
+  [-0.75, 0.75].forEach((lx) => {
+    const strip = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.03, 8.8)), stripMat);
+    strip.position.set(dcCX + lx, 3.6, rackZMid);
+    dcGroup.add(strip);
+  });
+  // Líneas de seguridad amarillas en el piso, junto a los racks
+  const safetyMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.7 }));
+  [-1.12, 1.12].forEach((lx) => {
+    const line = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.06, 0.012, 8.8)), safetyMat);
+    line.position.set(dcCX + lx, 0.246, rackZMid);
+    dcGroup.add(line);
+  });
+
+  // Seguridad: extintor y paro de emergencia junto a la entrada (fuera del hueco de la puerta)
+  const extinguisher = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 14)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.4, metalness: 0.3 }))
+  );
+  extinguisher.position.set(dcCX + 2.4, 0.5, dcCZ - DATACENTER.d / 2 + 0.35);
+  const estop = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.22, 0.28, 0.1)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xdc2626, emissive: 0x7f1d1d, emissiveIntensity: 0.6 }))
+  );
+  estop.position.set(dcCX - 2.4, 1.3, dcCZ - DATACENTER.d / 2 + 0.2);
+  dcGroup.add(extinguisher, estop);
+  // Tanques de supresión de incendios junto al UPS
+  [4.4, 5.1].forEach((tz) => {
+    const tank = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.25, 0.25, 1.5, 16)),
+      trackMat(new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.35, metalness: 0.5 }))
+    );
+    tank.position.set(dcCX - DATACENTER.w / 2 + 0.55, 0.75, dcCZ + tz);
+    dcGroup.add(tank);
   });
 
   // BATERÍAS INDUSTRIALES / SISTEMA UPS DE RESPALDO (Pared oeste)
@@ -3017,84 +3996,59 @@ export function buildColmenaOffice(
     dcGroup.add(meter);
   });
 
-  // Ductos aéreos HVAC y bandejas de fibra óptica
-  const hvacMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.7 }));
-  const hvacPipe = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.24, 0.24, DATACENTER.w - 1, 16)),
-    hvacMat
-  );
-  hvacPipe.rotation.z = Math.PI / 2;
-  hvacPipe.position.set(DATACENTER.cx, 3.4, DATACENTER.cz);
-  dcGroup.add(hvacPipe);
-
-  // GRAN PANTALLA GIGANTE DE MONITOREO DE INFRAESTRUCTURA Y MÉTRICAS (Pared Este)
-  const dcScreenCt = makeCanvasTex(1536, 640);
-  {
-    const g = dcScreenCt.ctx;
-    g.fillStyle = '#030712';
-    g.fillRect(0, 0, 1536, 640);
-
-    // Barra superior
-    g.fillStyle = '#0f172a';
-    g.fillRect(0, 0, 1536, 60);
-    g.fillStyle = '#00f0ff';
-    g.font = 'bold 30px "JetBrains Mono", monospace';
-    g.fillText('⚡ FLOWCLIC DATA CENTER · INFRAESTRUCTURA CRÍTICA & CLUSTER GPU', 30, 42);
-
-    // Paneles de métricas de Servidores, UPS y Almacenamiento
-    const metrics = [
-      { label: 'POTENCIA UPS', val: '99.4% ONLINE (N+1)', col: '#10b981' },
-      { label: 'CLUSTER GPU', val: '128 NODES · H100', col: '#38bdf8' },
-      { label: 'ALMACENAMIENTO SAN', val: '1.4 PB DISP. · NVMe', col: '#a855f7' },
-      { label: 'TEMPERATURA HVAC', val: '18.2 °C CONTROLADO', col: '#00f0ff' },
-    ];
-    metrics.forEach((m, idx) => {
-      const x = 30 + idx * 370;
-      g.fillStyle = '#0b1329';
-      g.fillRect(x, 85, 350, 120);
-      g.strokeStyle = '#1e293b';
-      g.lineWidth = 2;
-      g.strokeRect(x, 85, 350, 120);
-      g.fillStyle = '#94a3b8';
-      g.font = '18px monospace';
-      g.fillText(m.label, x + 20, 125);
-      g.fillStyle = m.col;
-      g.font = 'bold 26px monospace';
-      g.fillText(m.val, x + 20, 175);
-    });
-
-    // Gráfico de throughput de red en tiempo real
-    g.fillStyle = '#0a101f';
-    g.fillRect(30, 230, 1476, 380);
-    g.strokeStyle = '#1e293b';
-    g.strokeRect(30, 230, 1476, 380);
-    g.strokeStyle = '#00f0ff';
-    g.lineWidth = 4;
-    g.beginPath();
-    for (let i = 0; i < 45; i++) {
-      const gx = 50 + i * 32.5;
-      const gy = 480 - Math.sin(i * 0.5) * 80 - Math.cos(i * 1.1) * 45;
-      if (i === 0) g.moveTo(gx, gy);
-      else g.lineTo(gx, gy);
+  // PANTALLAS DE MONITOREO CON DATOS REALES DEL EQUIPO
+  addInfoScreen(
+    dcGroup,
+    DATACENTER.cx + DATACENTER.w / 2 - 0.12,
+    2.4,
+    DATACENTER.cz,
+    -Math.PI / 2,
+    6.4,
+    2.66,
+    'DATA CENTER · EQUIPO EN TIEMPO REAL',
+    '#00f0ff',
+    (g, x, y, w, h) => {
+      const ag = officeStats.agents;
+      drawKpis(g, x, y, w, h * 0.3, [
+        ['ACTIVOS', `${ag.filter((a) => a.status === 'working').length}/${ag.length}`, '#10b981'],
+        ['EJECUCIÓN', String(officeStats.stages.in_dev + officeStats.stages.sheldon_review), '#22d3ee'],
+        ['TICKETS', String(totalTickets()), '#f59e0b'],
+        ['PROYECTOS', String(officeStats.projects.length), '#a78bfa'],
+      ]);
+      drawBars(
+        g,
+        x,
+        y + h * 0.36,
+        w,
+        h * 0.64,
+        ag.map((a) => ({ label: a.name, value: a.ramKb, color: statusColor(a.status), text: Math.round(a.ramKb / 1024) + ' MB' })),
+        Math.max(1, ...ag.map((a) => a.ramKb))
+      );
     }
-    g.stroke();
-
-    dcScreenCt.tex.needsUpdate = true;
-  }
-  const dcSign = new THREE.Mesh(
-    trackGeo(new THREE.PlaneGeometry(6.4, 2.66)),
-    trackMat(
-      new THREE.MeshStandardMaterial({
-        map: dcScreenCt.tex,
-        emissiveMap: dcScreenCt.tex,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.85,
-      })
-    )
   );
-  dcSign.position.set(DATACENTER.cx + DATACENTER.w / 2 - 0.12, 2.4, DATACENTER.cz);
-  dcSign.rotation.y = -Math.PI / 2;
-  dcGroup.add(dcSign);
+  addInfoScreen(
+    dcGroup,
+    DATACENTER.cx - 4.6,
+    2.4,
+    DATACENTER.cz - DATACENTER.d / 2 + 0.12,
+    0,
+    3.8,
+    2.2,
+    'ESTADO DE AGENTES',
+    '#10b981',
+    (g, x, y, w, h) => {
+      drawList(
+        g,
+        x,
+        y,
+        w,
+        h,
+        officeStats.agents.map((a) => `${a.name} · ${a.status} · ${a.task || 'sin tarea'}`),
+        '#10b981',
+        'Sin agentes conectados'
+      );
+    }
+  );
 
   // Iluminación fría de Data Center
   const dcLight = new THREE.PointLight(0x00f0ff, 22, 22, 1.4);
@@ -3103,7 +4057,7 @@ export function buildColmenaOffice(
 
   // =========================================================================
   // OFICINA DEL CEO (Presidencia - El Despacho más Grande de la Oficina)
-  // Ubicada al oeste de Sheldon y el Laboratorio (cx: -23.5, cz: 0, w: 16, d: 27)
+  // Ubicada al oeste de Sheldon y el Laboratorio (cx: -22.5, w: 18)
   // =========================================================================
   const ceoGroup = new THREE.Group();
   scene.add(ceoGroup);
@@ -3126,37 +4080,20 @@ export function buildColmenaOffice(
   ceoFloor.receiveShadow = true;
   ceoGroup.add(ceoFloor);
 
-  // Gran alfombra ejecutiva persa / geométrica bajo el área presidencial
-  const ceoRugMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x1e1b4b,
-      roughness: 0.88,
-      metalness: 0.02,
-    })
-  );
-  const ceoRug = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(9.0, 0.02, 7.5)),
-    ceoRugMat
-  );
-  ceoRug.position.set(CEO_OFFICE.cx - 2.5, 0.21, CEO_OFFICE.cz);
-  ceoRug.receiveShadow = true;
-  ceoGroup.add(ceoRug);
-
   // Paredes perimetrales de la Oficina del CEO
   // (Pared sur tiene la puerta abierta hacia el pasillo central horizontal z = -1.5)
   const ceoW = CEO_OFFICE.cx - CEO_OFFICE.w / 2;
   const ceoE = CEO_OFFICE.cx + CEO_OFFICE.w / 2;
   const ceoN = CEO_OFFICE.cz - CEO_OFFICE.d / 2;
   const ceoS = CEO_OFFICE.cz + CEO_OFFICE.d / 2;
-  addGlassWall(ceoW, ceoN, ceoE, ceoN); // Pared norte
-  addGlassWall(ceoW, ceoN, ceoW, ceoS); // Pared oeste
-  // Pared este linda con la oficina de Sheldon (-15.5)
-  addGlassWall(ceoE, ceoN, ceoE, ceoS);
-  // Pared sur con puerta hacia el pasillo
-  addGlassWall(ceoW, ceoS, CEO_OFFICE.cx - 1.3, ceoS);
-  addGlassWall(CEO_OFFICE.cx + 1.3, ceoS, ceoE, ceoS);
+  // Las paredes de vidrio (sur con puerta y divisoria con Sheldon) las dibuja el trazado común de oficinas,
+  // igual que en las oficinas de Sheldon y Leonard: el CEO ya no tiene muros de vidrio propios extra.
+  void ceoW; void ceoE; void ceoN; void ceoS;
 
-  // Escritorio del CEO: 2 VECES MÁS GRANDE que los de Sheldon y Leonard (4.4m x 2.0m)
+  // Escritorio presidencial (4.4m x 2.0m): el CEO se sienta al norte y MIRA HACIA LA PUERTA (sur)
+  const CX = CEO_OFFICE.cx;
+  const CZ = CEO_OFFICE.cz;
+  const DESK_Z = CZ - 1.7;
   const deskMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x271911, // Madera noble de caoba profunda
@@ -3164,39 +4101,53 @@ export function buildColmenaOffice(
       metalness: 0.12,
     })
   );
-  const ceoDeskTop = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(2.0, 0.14, 4.4)), // Ancho en Z, Fondo en X
-    deskMat
-  );
-  ceoDeskTop.position.set(CEO_OFFICE.cx - 3.8, 0.82, CEO_OFFICE.cz);
+  const ceoDeskTop = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(4.4, 0.14, 2.0)), deskMat);
+  ceoDeskTop.position.set(CX, 0.82, DESK_Z);
   ceoDeskTop.castShadow = true;
   ceoDeskTop.receiveShadow = true;
   ceoGroup.add(ceoDeskTop);
 
-  // Patas monolíticas en aluminio oscuro pulido con acentos dorados
+  // Faldón frontal (cara hacia la puerta) y patas laterales en aluminio oscuro con acento dorado
   const ceoLegMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x0f172a,
-      roughness: 0.25,
-      metalness: 0.85,
-    })
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25, metalness: 0.85 })
   );
-  [-1.9, 1.9].forEach((zOff) => {
-    const leg = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.8, 0.75, 0.16)), ceoLegMat);
-    leg.position.set(CEO_OFFICE.cx - 3.8, 0.38, CEO_OFFICE.cz + zOff);
+  const goldMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0xd4a017, roughness: 0.25, metalness: 0.9, emissive: 0x7a5a00, emissiveIntensity: 0.25 })
+  );
+  [-2.0, 2.0].forEach((xOff) => {
+    const leg = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.16, 0.75, 1.8)), ceoLegMat);
+    leg.position.set(CX + xOff, 0.38, DESK_Z);
     leg.castShadow = true;
     ceoGroup.add(leg);
   });
+  const deskFront = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(4.0, 0.62, 0.08)), deskMat);
+  deskFront.position.set(CX, 0.42, DESK_Z + 0.88);
+  ceoGroup.add(deskFront);
+  const deskGold = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(4.4, 0.04, 0.04)), goldMat);
+  deskGold.position.set(CX, 0.76, DESK_Z + 1.0);
+  ceoGroup.add(deskGold);
 
-  // Tapete frontal de cuero negro con inserto de latón
-  const deskPadMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 }));
-  const deskPad = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.9, 0.015, 1.8)), deskPadMat);
-  deskPad.position.set(CEO_OFFICE.cx - 3.6, 0.9, CEO_OFFICE.cz);
+  // Badana de cuero con inserto de latón y teclado
+  const deskPad = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(1.9, 0.015, 0.8)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 }))
+  );
+  deskPad.position.set(CX, 0.9, DESK_Z - 0.35);
   ceoGroup.add(deskPad);
+  const ceoKb = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.62, 0.025, 0.2)), darkMetalMat);
+  ceoKb.position.set(CX, 0.93, DESK_Z - 0.3);
+  ceoGroup.add(ceoKb);
 
-  // Doble Monitor Ultrawide Curvo con el Dashboard Ejecutivo del CEO
-  const ceoScreenTex = createCeoScreenTexture(maxAnisotropy);
-  disposables.push(ceoScreenTex);
+  // Monitor ultrawide con el dashboard ejecutivo (pantalla hacia el CEO, espalda hacia los visitantes)
+  const ceoScreenTex = createInfoTex(1024, 335, 'DIRECCIÓN GENERAL', '#fbbf24', (g, x, y, w, h) => {
+    drawKpis(g, x, y, w, h * 0.48, [
+      ['EN CURSO', String(officeStats.stages.in_dev + officeStats.stages.sheldon_review), '#10b981'],
+      ['A APROBAR', String(officeStats.stages.ceo_approval), '#38bdf8'],
+      ['COMPLETADAS', String(officeStats.stages.completed), '#a78bfa'],
+      ['CIERRE', closeRate() + '%', '#f59e0b'],
+    ]);
+    drawList(g, x, y + h * 0.54, w, h * 0.46, officeStats.approvalTitles, '#38bdf8', 'Nada pendiente de aprobación');
+  });
   const ultrawideMat = trackMat(
     new THREE.MeshStandardMaterial({
       map: ceoScreenTex,
@@ -3207,66 +4158,62 @@ export function buildColmenaOffice(
       metalness: 0.3,
     })
   );
-  const monitorBackMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.3 }));
-
-  const ultrawideScreen = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(2.8, 2.8, 0.8, 24, 1, true, Math.PI * 0.88, Math.PI * 0.24)),
-    ultrawideMat
-  );
-  ultrawideScreen.position.set(CEO_OFFICE.cx - 3.2, 1.42, CEO_OFFICE.cz);
-  ultrawideScreen.rotation.y = -Math.PI / 2;
+  const ultrawideBack = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(2.7, 0.95, 0.06)), darkMetalMat);
+  ultrawideBack.position.set(CX, 1.5, DESK_Z - 0.55);
+  ceoGroup.add(ultrawideBack);
+  const ultrawideScreen = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(2.6, 0.85)), ultrawideMat);
+  ultrawideScreen.position.set(CX, 1.5, DESK_Z - 0.55 - 0.035);
+  ultrawideScreen.rotation.y = Math.PI; // la pantalla mira al norte, hacia el CEO
   ceoGroup.add(ultrawideScreen);
-
-  const monitorStand = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.06, 0.08, 0.6, 12)),
-    brushedAlumMat
-  );
-  monitorStand.position.set(CEO_OFFICE.cx - 4.1, 1.15, CEO_OFFICE.cz);
-  const monitorBase = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(0.3, 0.04, 0.7)),
-    darkMetalMat
-  );
-  monitorBase.position.set(CEO_OFFICE.cx - 4.0, 0.9, CEO_OFFICE.cz);
+  const monitorStand = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.06, 0.08, 0.5, 12)), brushedAlumMat);
+  monitorStand.position.set(CX, 1.17, DESK_Z - 0.55);
+  const monitorBase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.8, 0.04, 0.34)), darkMetalMat);
+  monitorBase.position.set(CX, 0.92, DESK_Z - 0.55);
   ceoGroup.add(monitorStand, monitorBase);
+  registerInfo([ceoDeskTop, ultrawideScreen, ultrawideBack, deskFront], {
+    title: 'ESCRITORIO DEL CEO',
+    section: 'Oficina del CEO',
+    description: 'Aquí se muestra el panel de dirección: tareas en curso, pendientes de aprobación y completadas.',
+    lines: () => [
+      `Tareas en curso: ${officeStats.stages.in_dev + officeStats.stages.sheldon_review}`,
+      `Pendientes de aprobación: ${officeStats.stages.ceo_approval}`,
+      `Completadas: ${officeStats.stages.completed}`,
+      ...officeStats.approvalTitles.map((t) => '• ' + t),
+    ],
+    images: () => canvasImages(ultrawideScreen),
+    empty: noTeamData,
+  });
 
-  // Sillón Presidencial de Cuero Negro del CEO tras el escritorio
+  // Sillón presidencial de cuero tras el escritorio, de cara a la puerta
   const chairLeatherMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x090d16,
-      roughness: 0.45,
-      metalness: 0.1,
-    })
+    new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.45, metalness: 0.1 })
   );
   const ceoChair = new THREE.Group();
-  ceoChair.position.set(CEO_OFFICE.cx - 5.0, 0, CEO_OFFICE.cz);
-  ceoChair.rotation.y = Math.PI / 2; // Mirando hacia el frente / pasillo
-
-  const chairSeat = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.72, 0.12, 0.68)), chairLeatherMat);
+  ceoChair.position.set(CX, 0, DESK_Z - 1.55);
+  ceoChair.rotation.y = 0; // el frente del sillón mira a +z (la puerta)
+  const chairSeat = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.78, 0.12, 0.72)), chairLeatherMat);
   chairSeat.position.y = 0.48;
-  const chairBack = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.7, 0.95, 0.14)), chairLeatherMat);
-  chairBack.position.set(0, 0.95, -0.28);
-  const chairHead = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.48, 0.22, 0.12)), chairLeatherMat);
-  chairHead.position.set(0, 1.48, -0.28);
+  const chairBack = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.76, 1.0, 0.14)), chairLeatherMat);
+  chairBack.position.set(0, 0.98, -0.32);
+  const chairHead = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.5, 0.24, 0.12)), chairLeatherMat);
+  chairHead.position.set(0, 1.58, -0.32);
+  [-1, 1].forEach((sx) => {
+    const arm = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.1, 0.1, 0.55)), chairLeatherMat);
+    arm.position.set(sx * 0.42, 0.78, 0);
+    ceoChair.add(arm);
+  });
   const chairStem = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.05, 0.06, 0.4, 12)), brushedAlumMat);
   chairStem.position.y = 0.24;
-  const chairBase = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.38, 0.38, 0.05, 8)), darkMetalMat);
+  const chairBase = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 8)), darkMetalMat);
   chairBase.position.y = 0.04;
   ceoChair.add(chairSeat, chairBack, chairHead, chairStem, chairBase);
   ceoGroup.add(ceoChair);
 
-  // Ubicar al PERSONAJE DEL CEO en su sillón presidencial
-  const ceoFigure = buildCeoFigure(true);
-  ceoFigure.position.set(CEO_OFFICE.cx - 4.95, 0, CEO_OFFICE.cz);
-  ceoFigure.rotation.y = Math.PI / 2; // Mirando hacia el escritorio y los visitantes
-  ceoGroup.add(ceoFigure);
+  // (El CEO es un personaje móvil: lo crea la vista 3D y se sienta aquí, mirando a la puerta)
 
-  // 2 SILLAS DE VISITA EJECUTIVAS frente al escritorio (para Sheldon y Leonard)
+  // 2 sillas de visita frente al escritorio (para Sheldon y Leonard), de cara al CEO
   const visitorChairMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.5,
-      metalness: 0.2,
-    })
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.2 })
   );
   const buildVisitorChair = (x: number, z: number, yaw: number) => {
     const chair = new THREE.Group();
@@ -3287,43 +4234,32 @@ export function buildColmenaOffice(
     chair.add(s, b, leg1, leg2, leg3, leg4);
     return chair;
   };
-  const chair1 = buildVisitorChair(CEO_VISITOR_SLOTS.chairSheldon.x, CEO_VISITOR_SLOTS.chairSheldon.z, CEO_VISITOR_SLOTS.chairSheldon.yaw);
-  const chair2 = buildVisitorChair(CEO_VISITOR_SLOTS.chairLeonard.x, CEO_VISITOR_SLOTS.chairLeonard.z, CEO_VISITOR_SLOTS.chairLeonard.yaw);
-  ceoGroup.add(chair1, chair2);
+  ceoGroup.add(
+    buildVisitorChair(CEO_VISITOR_SLOTS.chairSheldon.x, CEO_VISITOR_SLOTS.chairSheldon.z, CEO_VISITOR_SLOTS.chairSheldon.yaw),
+    buildVisitorChair(CEO_VISITOR_SLOTS.chairLeonard.x, CEO_VISITOR_SLOTS.chairLeonard.z, CEO_VISITOR_SLOTS.chairLeonard.yaw)
+  );
 
-  // Libreros grandes de caoba con libros encuadernados
-  const bookcaseMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x331c12, roughness: 0.35 }));
-  const bookColors = [0x991b1b, 0x1e3a8a, 0x14532d, 0x78350f, 0x312e81];
-  [-3.8, 3.8].forEach((zPos) => {
-    const bookcase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.2, 3.2, 3.2)), bookcaseMat);
-    bookcase.position.set(CEO_OFFICE.cx - 6.8, 1.6, CEO_OFFICE.cz + zPos);
-    bookcase.castShadow = true;
-    ceoGroup.add(bookcase);
+  // Alfombra presidencial bajo el área del escritorio y las sillas de visita
+  addRug(ceoGroup, CX, CZ - 1.1, 7.0, 5.0, 0x1e1b4b);
 
-    // Baldas con libros
-    for (let row = 0; row < 4; row++) {
-      for (let b = 0; b < 7; b++) {
-        const bMat = trackMat(
-          new THREE.MeshStandardMaterial({
-            color: bookColors[(row * 7 + b) % bookColors.length],
-            roughness: 0.4,
-          })
-        );
-        const book = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.35, 0.38, 0.09)), bMat);
-        book.position.set(
-          CEO_OFFICE.cx - 6.4,
-          0.6 + row * 0.65,
-          CEO_OFFICE.cz + zPos - 1.1 + b * 0.36
-        );
-        ceoGroup.add(book);
-      }
-    }
-  });
+  // Biblioteca de caoba en la pared norte, a ambos lados del rótulo (frente hacia el sur)
+  [-6.6, -4.2, 4.2, 6.6].forEach((dx, i) => addBookcase(ceoGroup, CX + dx, CZ - CEO_OFFICE.d / 2 + 0.3, 0, 2.2, 3.2, i + 1));
+  // Librerías en la pared oeste (frente hacia el este) y vitrina de trofeos en la este
+  [-3.9, -0.5].forEach((dz) => addBookcase(ceoGroup, CX - CEO_OFFICE.w / 2 + 0.3, CZ + dz, Math.PI / 2, 3.0, 3.0));
+  // Pared derecha (compartida con Sheldon): libreros del CEO dentro de su oficina, con el frente hacia el CEO
+  [-3.9, -0.5].forEach((dz) => addBookcase(ceoGroup, CX + CEO_OFFICE.w / 2 - 0.3, CZ + dz, -Math.PI / 2, 3.0, 3.0));
 
-  // Figuras coleccionables: Anime (Mecha Robot), Películas (Monolito Sci-Fi) e IA (Cubo Neuronal)
-  // 1) Mecha Robot de Anime
+  // Aparador de caoba tras el sillón con las figuras coleccionables
+  const credenza = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.8, 0.8, 0.55)), deskMat);
+  credenza.position.set(CX, 0.4, CZ - CEO_OFFICE.d / 2 + 1.0);
+  credenza.castShadow = true;
+  ceoGroup.add(credenza);
+  const CRED_Y = 0.8;
+  const CRED_Z = CZ - CEO_OFFICE.d / 2 + 1.0;
+
+  // 1) Mecha robot de anime
   const mechaGroup = new THREE.Group();
-  mechaGroup.position.set(CEO_OFFICE.cx - 3.8, 1.05, CEO_OFFICE.cz - 1.8);
+  mechaGroup.position.set(CX - 1.3, CRED_Y + 0.14, CRED_Z);
   const mechaBody = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(0.18, 0.28, 0.14)),
     trackMat(new THREE.MeshStandardMaterial({ color: 0xe11d48, metalness: 0.8, roughness: 0.2 }))
@@ -3334,72 +4270,81 @@ export function buildColmenaOffice(
   );
   mechaHead.position.y = 0.2;
   const mechaWings = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(0.04, 0.22, 0.42)),
+    trackGeo(new THREE.BoxGeometry(0.42, 0.22, 0.04)),
     trackMat(new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.7 }))
   );
-  mechaWings.position.set(-0.06, 0.1, 0);
+  mechaWings.position.set(0, 0.1, -0.06);
   mechaGroup.add(mechaBody, mechaHead, mechaWings);
   ceoGroup.add(mechaGroup);
 
-  // 2) Monolito Sci-Fi de Película
+  // 2) Monolito sci-fi
   const monolith = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(0.12, 0.48, 0.24)),
+    trackGeo(new THREE.BoxGeometry(0.24, 0.48, 0.12)),
     trackMat(new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.05, metalness: 0.95 }))
   );
-  monolith.position.set(CEO_OFFICE.cx - 3.8, 1.15, CEO_OFFICE.cz + 1.8);
+  monolith.position.set(CX + 1.3, CRED_Y + 0.24, CRED_Z);
   ceoGroup.add(monolith);
 
-  // 3) Cubo de Red Neuronal Holográfica de IA
+  // 3) Cubo de red neuronal holográfica de IA
   const aiHoloCube = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(0.26, 0.26, 0.26)),
     trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0x38bdf8,
-        emissive: 0x38bdf8,
-        emissiveIntensity: 0.85,
-        wireframe: true,
-      })
+      new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.85, wireframe: true })
     )
   );
-  aiHoloCube.position.set(CEO_OFFICE.cx - 4.3, 1.15, CEO_OFFICE.cz);
+  aiHoloCube.position.set(CX, CRED_Y + 0.4, CRED_Z);
   spinners.push(aiHoloCube);
   ceoGroup.add(aiHoloCube);
 
-  // Gran Sofá Seccional de Cuero en el Área Lounge del Despacho
-  const sofaLeatherMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x1f2937,
-      roughness: 0.5,
-      metalness: 0.15,
-    })
+  // Globo terráqueo y trofeo sobre el escritorio
+  const globe = new THREE.Mesh(
+    trackGeo(new THREE.SphereGeometry(0.2, 20, 14)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.4, metalness: 0.2 }))
   );
-  const ceoSoofa = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(4.8, 0.48, 1.3)),
-    sofaLeatherMat
-  );
-  ceoSoofa.position.set(CEO_OFFICE.cx + 2.0, 0.42, CEO_OFFICE.cz + 4.2);
-  ceoSoofa.castShadow = true;
-  const ceoSoofaBack = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(4.8, 0.62, 0.32)),
-    sofaLeatherMat
-  );
-  ceoSoofaBack.position.set(CEO_OFFICE.cx + 2.0, 0.9, CEO_OFFICE.cz + 4.75);
-  ceoGroup.add(ceoSoofa, ceoSoofaBack);
+  globe.position.set(CX - 1.7, 1.14, DESK_Z - 0.3);
+  const globeBase = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.1, 0.13, 0.05, 12)), goldMat);
+  globeBase.position.set(CX - 1.7, 0.92, DESK_Z - 0.3);
+  ceoGroup.add(globe, globeBase);
+  const ceoTrophy = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.1, 0.05, 0.3, 12)), goldMat);
+  ceoTrophy.position.set(CX + 1.7, 1.07, DESK_Z - 0.3);
+  ceoGroup.add(ceoTrophy);
 
-  // Mesa de centro baja de mármol negro frente al sofá
-  const marbleMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x030712,
-      roughness: 0.15,
-      metalness: 0.3,
-    })
-  );
-  const marbleTable = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(3.2, 0.08, 1.1)),
-    marbleMat
-  );
-  marbleTable.position.set(CEO_OFFICE.cx + 2.0, 0.38, CEO_OFFICE.cz + 2.6);
-  ceoGroup.add(marbleTable);
+  // Zona lounge en la esquina suroeste (lejos de la puerta): sofá, butacas y mesa de centro
+  addRug(ceoGroup, CX - 5.2, CZ + 3.6, 5.4, 3.6, 0x312e81, 0xa78bfa);
+  addSofa(ceoGroup, CX - 5.2, CZ + 5.0, Math.PI, 3.6);
+  addCoffeeTable(ceoGroup, CX - 5.2, CZ + 3.4, 2.0, 1.0);
+  addSofa(ceoGroup, CX - 7.6, CZ + 3.4, Math.PI / 2, 1.3, 0x7c2d12);
+  addSofa(ceoGroup, CX - 2.8, CZ + 3.4, -Math.PI / 2, 1.3, 0x7c2d12);
+  addInfoScreen(ceoGroup, CX - CEO_OFFICE.w / 2 + 0.12, 2.0, CZ + 4.7, Math.PI / 2, 2.0, 1.3, 'INDICADORES', '#fbbf24', (g, x, y, w, h) => {
+    drawBars(
+      g,
+      x,
+      y,
+      w,
+      h,
+      STAGE_META.map(([k, label, color]) => ({ label, value: officeStats.stages[k], color })),
+      Math.max(1, ...STAGE_META.map(([k]) => officeStats.stages[k]))
+    );
+  });
+
+  // Rincón de reuniones informal en la esquina sureste: mesa redonda y 4 sillas
+  const roundTable = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.95, 0.95, 0.07, 28)), deskMat);
+  roundTable.position.set(CX + 5.6, 0.76, CZ + 3.4);
+  const roundStem = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.1, 0.16, 0.74, 12)), ceoLegMat);
+  roundStem.position.set(CX + 5.6, 0.37, CZ + 3.4);
+  ceoGroup.add(roundTable, roundStem);
+  [0, 1, 2, 3].forEach((i) => {
+    const a = (i * Math.PI) / 2 + Math.PI / 4;
+    ceoGroup.add(buildVisitorChair(CX + 5.6 + Math.sin(a) * 1.5, CZ + 3.4 + Math.cos(a) * 1.5, a + Math.PI));
+  });
+
+  // Lámparas de pie
+  addFloorLamp(ceoGroup, CX - 3.4, DESK_Z - 1.9);
+  addFloorLamp(ceoGroup, CX + 3.4, DESK_Z - 1.9);
+  addFloorLamp(ceoGroup, CX - 7.8, CZ + 1.7);
+  addInfoScreen(ceoGroup, CX - CEO_OFFICE.w / 2 + 0.12, 2.0, CZ + 2.3, Math.PI / 2, 2.0, 1.3, 'APROBACIONES CEO', '#38bdf8', (g, x, y, w, h) => {
+    drawList(g, x, y, w, h, officeStats.approvalTitles, '#38bdf8', 'Sin aprobaciones pendientes');
+  });
 
   // Rótulo "OFICINA DEL CEO" en la pared del despacho
   const ceoSignCt = makeCanvasTex(1200, 360);
@@ -3438,9 +4383,15 @@ export function buildColmenaOffice(
   ceoGroup.add(ceoChandelier);
 
   const ceoDeskSpot = new THREE.SpotLight(0xfffbeb, 42, 22, Math.PI / 4, 0.45, 1.4);
-  ceoDeskSpot.position.set(CEO_OFFICE.cx - 3.8, 6.2, CEO_OFFICE.cz);
-  ceoDeskSpot.target.position.set(CEO_OFFICE.cx - 3.8, 0.8, CEO_OFFICE.cz);
+  ceoDeskSpot.position.set(CEO_OFFICE.cx, 6.2, CEO_OFFICE.cz - 1.7);
+  ceoDeskSpot.target.position.set(CEO_OFFICE.cx, 0.8, CEO_OFFICE.cz - 1.7);
   ceoGroup.add(ceoDeskSpot, ceoDeskSpot.target);
+
+  // =========================================================================
+  // SALA DE JUNTAS: lámparas de pie
+  // =========================================================================
+  addFloorLamp(rootScene, BOARDROOM.cx - BOARDROOM.w / 2 + 1.1, BOARDROOM.cz + 4.6);
+  addFloorLamp(rootScene, BOARDROOM.cx + BOARDROOM.w / 2 - 1.1, BOARDROOM.cz + 2.0);
 
   scene = rootScene;
   const hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x1e293b, 0.75);
@@ -3467,8 +4418,8 @@ export function buildColmenaOffice(
   scene.add(keyLight);
 
   // Laboratorio: Cool Cyan Monitor Lab Glow
-  const labLight = new THREE.PointLight(0x06b6d4, 18, 17, 1.6);
-  labLight.position.set(-9.0, 4.2, 0.2);
+  const labLight = new THREE.PointLight(0x06b6d4, 22, 22, 1.5);
+  labLight.position.set(-13.5, 4.2, 0.2);
   labGroup.add(labLight);
 
   // Oficina de Sheldon: Focal SpotLight on Whiteboard & Architecture Table
@@ -3497,8 +4448,11 @@ export function buildColmenaOffice(
     setSelectedProject,
     getPickables,
     resolvePick,
+    getInfoPickables: () => infoPickables,
+    resolveInfo,
     setLabDesks,
     setLabBoards,
+    setOfficeStats,
     setBoardroomSeats,
     dispose: () => {
       disposables.forEach((d) => d.dispose());

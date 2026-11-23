@@ -491,7 +491,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
                   : 'border border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800'
               }`}
             >
-              Oficina Senior
+              Oficina Leonard
             </button>
             <button
               type="button"
@@ -692,7 +692,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
             {loadingMessages && <span className="text-[10px] text-slate-500">Sincronizando...</span>}
           </div>
 
-          <div className="flex-1 rounded-xl border border-slate-800/80 bg-[#060A13] p-2.5 overflow-y-auto max-h-[220px] space-y-2">
+          <div className="flex-1 rounded-xl border border-slate-800/80 bg-[#060A13] p-2.5 overflow-y-auto min-h-[220px] max-h-[48vh] space-y-2">
             {messages.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-500">
                 No hay mensajes aún en este hilo.

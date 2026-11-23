@@ -1,3 +1,4 @@
+import type { AvatarLook } from '../types/agentProfile';
 import type {
   Agent,
   AgentStatus,
@@ -58,7 +59,13 @@ export const tierFromModel = (primary: string): ModelTier =>
 
 /* ── Agente ────────────────────────────────────────────────────────────────────────────── */
 export function agentFromApi(a: ApiAgent): Agent {
-  const hair = a.avatar.hairStyle;
+  const look: AvatarLook = {};
+  (['gender', 'skinTone', 'hairColor', 'face', 'topStyle', 'topColor', 'innerColor', 'pantsStyle', 'pantsColor', 'shoeColor'] as const).forEach(
+    (k) => {
+      const v = a.avatar[k];
+      if (v != null) (look as Record<string, unknown>)[k] = v;
+    }
+  );
   return {
     id: a.id,
     name: a.name,
@@ -73,10 +80,8 @@ export function agentFromApi(a: ApiAgent): Agent {
     tokensSavedToday: 0,
     isCTO: a.isCto,
     glasses: a.avatar.glasses ?? undefined,
-    hairStyle:
-      hair === 'short' || hair === 'long' || hair === 'curly' || hair === 'bun' || hair === 'parted'
-        ? hair
-        : undefined,
+    hairStyle: a.avatar.hairStyle ?? undefined,
+    look: Object.keys(look).length ? look : undefined,
     character: a.character,
     roleType: a.roleType,
     functions: a.functions,

@@ -590,7 +590,8 @@ export function createGamingScreenTexture(
 
 export function createLegoFaceTexture(
   skinHex = '#f4c29f',
-  isSerious = false
+  isSerious = false,
+  opts?: { face?: 'neutral' | 'smile' | 'serious' | 'worried'; female?: boolean }
 ): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -629,12 +630,50 @@ export function createLegoFaceTexture(
     ctx.fill();
   });
 
+  // Pestañas (género femenino)
+  if (opts?.female) {
+    ctx.strokeStyle = '#111111';
+    ctx.lineWidth = 4;
+    [-42, 42].forEach((ox) => {
+      [-1, 0, 1].forEach((k) => {
+        ctx.beginPath();
+        ctx.moveTo(centroX + ox + k * 9, 100);
+        ctx.lineTo(centroX + ox + k * 15, 90);
+        ctx.stroke();
+      });
+    });
+  }
+
+  // Expresión elegida (cejas preocupadas / boca)
+  if (opts?.face === 'worried') {
+    ctx.fillStyle = skinHex;
+    ctx.fillRect(centroX - 90, 60, 180, 36);
+    ctx.strokeStyle = '#2c1b12';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(centroX - 65, 88);
+    ctx.lineTo(centroX - 22, 72);
+    ctx.moveTo(centroX + 22, 72);
+    ctx.lineTo(centroX + 65, 88);
+    ctx.stroke();
+  }
+
   // Mouth
-  ctx.strokeStyle = '#111111';
-  ctx.lineWidth = 6;
+  ctx.strokeStyle = opts?.female ? '#be185d' : '#111111';
+  ctx.lineWidth = opts?.female ? 8 : 6;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  if (isSerious) {
+  if (opts?.face === 'smile') {
+    ctx.moveTo(centroX - 32, 166);
+    ctx.quadraticCurveTo(centroX, 190, centroX + 32, 166);
+  } else if (opts?.face === 'neutral') {
+    ctx.moveTo(centroX - 22, 174);
+    ctx.lineTo(centroX + 22, 174);
+  } else if (opts?.face === 'worried') {
+    ctx.moveTo(centroX - 24, 180);
+    ctx.quadraticCurveTo(centroX, 168, centroX + 24, 180);
+  } else if (isSerious || opts?.face === 'serious') {
     ctx.moveTo(centroX - 28, 175);
     ctx.quadraticCurveTo(centroX, 177, centroX + 28, 172);
   } else {
@@ -834,4 +873,149 @@ export function createCeoScreenTexture(maxAnisotropy: number): THREE.CanvasTextu
   ctx.stroke();
 
   return finalizeColorTexture(canvas, maxAnisotropy);
+}
+
+
+/**
+ * Textura frontal del torso según la prenda elegida (camiseta, chaqueta, sudadera, traje o vestido).
+ * `topHex` es la prenda principal e `innerHex` la camisa interior / corbata / cinturón.
+ */
+export function createOutfitTorsoTexture(
+  style: 'tshirt' | 'jacket' | 'hoodie' | 'suit' | 'dress',
+  topHex: string,
+  innerHex: string,
+  female = false
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const g = canvas.getContext('2d')!;
+  const line = 'rgba(0,0,0,0.45)';
+
+  if (style === 'tshirt') {
+    g.fillStyle = topHex;
+    g.fillRect(0, 0, 512, 512);
+    // cuello redondo y emblema
+    g.fillStyle = innerHex;
+    g.beginPath();
+    g.arc(256, 0, 70, 0, Math.PI);
+    g.fill();
+    g.beginPath();
+    g.arc(256, 280, 70, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = line;
+    g.lineWidth = 6;
+    g.stroke();
+    g.fillStyle = topHex;
+    g.beginPath();
+    g.moveTo(268, 225);
+    g.lineTo(232, 285);
+    g.lineTo(258, 285);
+    g.lineTo(244, 335);
+    g.lineTo(284, 270);
+    g.lineTo(258, 270);
+    g.closePath();
+    g.fill();
+  } else if (style === 'jacket') {
+    // camisa interior + chaqueta abierta con solapas y bolsillos
+    g.fillStyle = innerHex;
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = topHex;
+    g.fillRect(0, 0, 150, 512);
+    g.fillRect(362, 0, 150, 512);
+    g.strokeStyle = line;
+    g.lineWidth = 6;
+    g.strokeRect(0, 0, 150, 512);
+    g.strokeRect(362, 0, 150, 512);
+    [38, 396].forEach((bx) => {
+      g.strokeRect(bx, 250, 78, 90);
+      g.fillStyle = 'rgba(0,0,0,0.18)';
+      g.fillRect(bx - 3, 250, 84, 26);
+    });
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(250, 60, 12, 440);
+  } else if (style === 'hoodie') {
+    g.fillStyle = topHex;
+    g.fillRect(0, 0, 512, 512);
+    g.strokeStyle = line;
+    g.lineWidth = 6;
+    // capucha en V y cordones
+    g.beginPath();
+    g.moveTo(150, 0);
+    g.lineTo(256, 120);
+    g.lineTo(362, 0);
+    g.stroke();
+    g.strokeStyle = innerHex;
+    g.lineWidth = 8;
+    g.beginPath();
+    g.moveTo(215, 70);
+    g.lineTo(210, 190);
+    g.moveTo(297, 70);
+    g.lineTo(302, 190);
+    g.stroke();
+    // bolsillo canguro
+    g.strokeStyle = line;
+    g.lineWidth = 6;
+    g.fillStyle = 'rgba(0,0,0,0.16)';
+    g.beginPath();
+    g.moveTo(110, 330);
+    g.lineTo(402, 330);
+    g.lineTo(440, 480);
+    g.lineTo(72, 480);
+    g.closePath();
+    g.fill();
+    g.stroke();
+  } else if (style === 'suit') {
+    g.fillStyle = '#f8fafc';
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = topHex;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(205, 0);
+    g.lineTo(256, 250);
+    g.lineTo(190, 512);
+    g.lineTo(0, 512);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.moveTo(512, 0);
+    g.lineTo(307, 0);
+    g.lineTo(256, 250);
+    g.lineTo(322, 512);
+    g.lineTo(512, 512);
+    g.closePath();
+    g.fill();
+    // corbata
+    g.fillStyle = innerHex;
+    g.beginPath();
+    g.moveTo(236, 40);
+    g.lineTo(276, 40);
+    g.lineTo(290, 380);
+    g.lineTo(256, 420);
+    g.lineTo(222, 380);
+    g.closePath();
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    [320, 410].forEach((y) => g.fillRect(150, y, 14, 14));
+  } else {
+    // vestido
+    g.fillStyle = topHex;
+    g.fillRect(0, 0, 512, 512);
+    g.fillStyle = innerHex;
+    g.fillRect(0, 300, 512, 46);
+    g.fillStyle = 'rgba(255,255,255,0.25)';
+    g.beginPath();
+    g.arc(256, 0, 95, 0, Math.PI);
+    g.fill();
+    if (female) {
+      g.fillStyle = 'rgba(0,0,0,0.12)';
+      g.beginPath();
+      g.arc(256, 140, 60, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }

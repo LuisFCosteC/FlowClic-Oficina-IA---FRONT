@@ -1,3 +1,4 @@
+import type { AvatarLook, HairStyle } from './agentProfile';
 import type {
   AgentLimits,
   AgentModelConfig,
@@ -46,7 +47,9 @@ export interface Agent {
   tokensSavedToday: number;
   isCTO?: boolean;
   glasses?: boolean;
-  hairStyle?: 'short' | 'long' | 'curly' | 'bun' | 'parted';
+  hairStyle?: HairStyle;
+  /** Apariencia completa (ropa, piel, cabello...). */
+  look?: AvatarLook;
   character?: string;
   roleType?: RoleType;
   functions?: string[];

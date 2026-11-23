@@ -9,20 +9,22 @@ import {
   AvatarRig,
   createAvatarRig,
   setAvatarStatusColor,
-  updateAvatarAnimation,
-} from './three/avatarBuilder';
+  updateAvatarAnimation, createCeoRig } from './three/avatarBuilder';
 import {
   BoardProject,
   boardroomSeats,
   BuiltOfficeScene,
   buildColmenaOffice,
   CEO_OFFICE,
+  CEO_DESK_SLOT,
   CEO_VISITOR_SLOTS,
   CORRIDOR_W,
   DATACENTER,
   DOORS,
   labTaskSwapPath,
   LOUNGE_SLOTS,
+  MEAL_SLOTS,
+  SLEEP_SLOTS,
   REVIEW_SLOTS,
   SENIOR_DESK_SLOT,
   SENIOR_POUF_SLOT,
@@ -33,7 +35,10 @@ import {
   WORKSTATION_SLOTS,
   ZONE_LABEL_ANCHORS,
   ZoneSlot,
+  type InfoTarget,
 } from './three/sceneBuilder';
+import { NavGrid } from './three/navGrid';
+import { MeetingChat, type MeetingReport } from './MeetingChat';
 import { createContactShadowTexture } from './three/proceduralTextures';
 
 interface Colmena3DViewProps {
@@ -56,38 +61,38 @@ const CAMERA_PRESETS: Record<
   },
   oficina_ceo: {
     label: 'Oficina del CEO',
-    pos: [-23.5, 14.5, 4.5],
-    target: [-23.5, 0.8, -7.7],
+    pos: [-22.5, 14.5, 4.5],
+    target: [-22.5, 0.8, -8.7],
   },
   laboratorio: {
     label: 'Laboratorio',
-    pos: [-15.5, 15.5, 22.0],
-    target: [-15.5, 0.8, 7.7],
+    pos: [-16.5, 15.5, 23.5],
+    target: [-16.5, 0.8, 8.7],
   },
   oficina_sheldon: {
     label: 'Oficina de Sheldon',
     pos: [-7.5, 13.5, 4.5],
-    target: [-7.5, 0.8, -7.7],
+    target: [-7.5, 0.8, -8.7],
   },
   oficina_senior: {
-    label: 'Oficina del Senior',
-    pos: [7.5, 13.5, 4.5],
-    target: [7.5, 0.8, -7.7],
+    label: 'Oficina del Leonard',
+    pos: [4.5, 13.5, 4.5],
+    target: [4.5, 0.8, -8.7],
   },
   sala_juntas: {
     label: 'Sala de juntas',
-    pos: [21.5, 13.5, 4.5],
-    target: [21.5, 0.8, -7.7],
+    pos: [17.5, 13.5, 4.5],
+    target: [17.5, 0.8, -8.7],
   },
   datacenter: {
     label: 'Data Center',
-    pos: [21.5, 13.5, 20.5],
-    target: [21.5, 0.8, 7.7],
+    pos: [17.5, 13.5, 22.5],
+    target: [17.5, 0.8, 8.7],
   },
   zona_descanso: {
     label: 'Zona de descanso',
-    pos: [7.5, 13.5, 20.5],
-    target: [7.5, 0.8, 7.7],
+    pos: [4.5, 13.5, 22.5],
+    target: [4.5, 0.8, 8.7],
   },
 };
 
@@ -115,14 +120,14 @@ function getRoom(x: number, z: number): RoomKey | null {
 
   if (z < 0) {
     // Ala Norte
-    if (x < -15.5) return 'ceo';
+    if (x < -13.5) return 'ceo';
     if (x < -1.5) return 'sheldon';
-    if (x < 13.5) return 'senior';
+    if (x < 10.5) return 'senior';
     return 'junta';
   } else {
     // Ala Sur
     if (x < -1.5) return 'laboratorio';
-    if (x < 13.5) return 'descanso';
+    if (x < 10.5) return 'descanso';
     return 'datacenter';
   }
 }
@@ -162,19 +167,87 @@ function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[]
   return points;
 }
 
+/** El CEO no es un agente de la API: es un personaje más de la escena (con su etiqueta y movimiento). */
+const CEO_ID = 'ceo-figure';
+const CEO_AGENT: Agent = {
+  id: CEO_ID,
+  name: 'CEO',
+  title: 'CEO',
+  systemPrompt: '',
+  modelTier: 'opus_pro',
+  color: '#fbbf24',
+  status: 'idle',
+  ramKb: 0,
+  currentTask: '',
+  project: '',
+  tokensSavedToday: 0,
+};
+const isCeoAgent = (a: Agent) => a.id === CEO_ID;
+
 const isSenior = (a: Agent) => !a.isCTO && /full.?stack/i.test(a.title ?? '');
 /** Agentes con puesto fijo en el laboratorio (todos menos el CTO y el Senior), en orden. */
-const labDeskAgents = (agents: Agent[]) => agents.filter((a) => !a.isCTO && !isSenior(a));
+const labDeskAgents = (agents: Agent[]) => agents.filter((a) => !a.isCTO && !isSenior(a) && !isCeoAgent(a));
 
-function assignZoneSlots(agents: Agent[], meeting = false, tasks: KanbanTask[] = []): Map<string, ZoneSlot> {
+/** Estado global de la oficina: todos pausados en la zona de descanso. */
+type GlobalMode = 'breakfast' | 'lunch' | 'sleep' | null;
+const GLOBAL_MODE_META: Record<Exclude<GlobalMode, null>, { label: string; detail: string }> = {
+  breakfast: { label: 'Desayuno', detail: 'todos sentados en las mesas de la zona de descanso' },
+  lunch: { label: 'Almuerzo', detail: 'todos sentados en las mesas de la zona de descanso' },
+  sleep: { label: 'Dormir', detail: 'todos acostados en las camas de la zona de descanso' },
+};
+const GLOBAL_MODE_KEY = 'flowclic.globalMode';
+const readStoredMode = (): GlobalMode => {
+  try {
+    const v = window.localStorage.getItem(GLOBAL_MODE_KEY);
+    return v === 'breakfast' || v === 'lunch' || v === 'sleep' ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+function assignZoneSlots(
+  agents: Agent[],
+  meeting = false,
+  tasks: KanbanTask[] = [],
+  mode: GlobalMode = null,
+  ceoMeeting = false
+): Map<string, ZoneSlot> {
   const map = new Map<string, ZoneSlot>();
+
+  if (mode) {
+    // Estado global: todos a la zona de descanso (mesas para comer, camas para dormir), sin trabajar
+    const list = mode === 'sleep' ? SLEEP_SLOTS : MEAL_SLOTS;
+    [...agents].sort((x, y) => Number(isCeoAgent(y)) - Number(isCeoAgent(x))).forEach((agent, i) => {
+      const base = i < list.length ? list[i] : LOUNGE_SLOTS[(i - list.length) % LOUNGE_SLOTS.length];
+      const extra = i < list.length ? 0 : Math.floor((i - list.length) / LOUNGE_SLOTS.length);
+      map.set(agent.id, {
+        x: base.x + extra * 0.5,
+        z: base.z + extra * 0.5,
+        yaw: base.yaw,
+        pose: extra ? undefined : base.pose,
+        y: extra ? undefined : base.y,
+      });
+    });
+    return map;
+  }
 
   if (meeting) {
     // Junta: el CTO en la cabecera y el resto en sus sillas
     const seats = boardroomSeats(agents.length);
-    [...agents]
-      .sort((x, y) => Number(!!y.isCTO) - Number(!!x.isCTO))
-      .forEach((agent, i) => map.set(agent.id, seats[i]));
+    const last = seats.length - 1;
+    const ceo = agents.find(isCeoAgent);
+    const cto = agents.find((a) => a.isCTO);
+    const leonard = agents.find((a) => !a.isCTO && isSenior(a));
+    if (ceo) map.set(ceo.id, seats[0]); // cabecera
+    if (cto) map.set(cto.id, seats[last - 1]); // a su lado (norte)
+    if (leonard) map.set(leonard.id, seats[last]); // a su lado (sur)
+    // El resto, de las sillas más cercanas a la cabecera hacia el fondo
+    let seatIdx = last - 2;
+    agents.forEach((a) => {
+      if (map.has(a.id)) return;
+      map.set(a.id, seats[Math.max(1, seatIdx)]);
+      seatIdx--;
+    });
     return map;
   }
 
@@ -188,16 +261,20 @@ function assignZoneSlots(agents: Agent[], meeting = false, tasks: KanbanTask[] =
   let loungeIdx = 0;
 
   agents.forEach((agent) => {
+    if (isCeoAgent(agent)) {
+      map.set(agent.id, CEO_DESK_SLOT);
+      return;
+    }
     // BLOCKED espera en la zona de revisión; SLEEP_QUOTA descansa (lounge / puf / sofá).
     const inReview = agent.status === 'waiting_sheldon' || agent.status === 'blocked';
     const isLeonard = !agent.isCTO && (agent.id === 'leonard' || /full.?stack/i.test(agent.title ?? ''));
 
     // Si Sheldon o Leonard están esperando aprobación del CEO, se sientan en las sillas de la Oficina del CEO
-    if (agent.isCTO && (inReview || hasPendingCeoApproval)) {
+    if (agent.isCTO && (ceoMeeting || inReview || hasPendingCeoApproval)) {
       map.set(agent.id, CEO_VISITOR_SLOTS.chairSheldon);
       return;
     }
-    if (isLeonard && (inReview || hasPendingCeoApproval)) {
+    if (isLeonard && (ceoMeeting || inReview || hasPendingCeoApproval)) {
       map.set(agent.id, CEO_VISITOR_SLOTS.chairLeonard);
       return;
     }
@@ -245,6 +322,8 @@ function assignZoneSlots(agents: Agent[], meeting = false, tasks: KanbanTask[] =
         x: base.x + overflow * 0.5,
         z: base.z + overflow * 0.5,
         yaw: base.yaw,
+        pose: overflow ? undefined : base.pose,
+        y: overflow ? undefined : base.y,
       });
       loungeIdx++;
     }
@@ -268,7 +347,10 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState<boolean>(false);
   const [webglLost, setWebglLost] = useState<boolean>(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [infoTarget, setInfoTarget] = useState<InfoTarget | null>(null);
   const [meeting, setMeeting] = useState<boolean>(false);
+  const [ceoMeeting, setCeoMeeting] = useState<boolean>(false);
+  const [globalMode, setGlobalMode] = useState<GlobalMode>(readStoredMode);
   const lastTaskRef = useRef<Map<string, string>>(new Map());
   const keysRef = useRef<Set<string>>(new Set());
   const officeRef = useRef<BuiltOfficeScene | null>(null);
@@ -276,6 +358,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
   // Mutable refs for Three.js loop to stay decoupled from React renders
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rigsRef = useRef<Map<string, AvatarRig>>(new Map());
+  const navRef = useRef<NavGrid | null>(null);
   const shadowTexRef = useRef<THREE.CanvasTexture | null>(null);
   const selectedIdRef = useRef<string>(selectedAgentId);
   const agentsRef = useRef<Agent[]>(agents);
@@ -424,6 +507,8 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     const maxAniso = renderer.capabilities.getMaxAnisotropy();
     const builtOffice = buildColmenaOffice(scene, maxAniso, isSoftwareGl);
     officeRef.current = builtOffice;
+    // Cuadrícula de navegación: obstáculos (paredes, muebles) extraídos de la escena construida
+    navRef.current = new NavGrid(scene, { minX: -32.5, maxX: 24.5, minZ: -14.9, maxZ: 14.9 });
 
     // Shared contact shadow texture for avatars
     const contactShadowTex = createContactShadowTexture();
@@ -476,15 +561,26 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
       const hits = raycaster.intersectObjects(proxies, false);
       if (hits.length > 0) {
         const hitId = hits[0].object.userData.agentId as string | undefined;
-        if (hitId) setSelectedAgentId(hitId);
+        if (hitId && hitId !== CEO_ID) setSelectedAgentId(hitId);
         return;
       }
       // Sin avatar: ¿tablero o libro de proyecto?
       pickRay.setFromCamera(_mouseNdc, camera);
-      const pickHits = pickRay.intersectObjects(builtOffice.getPickables(), false);
+      const projectPicks = builtOffice.getPickables();
+      const pickHits = pickRay.intersectObjects([...projectPicks, ...builtOffice.getInfoPickables()], false);
       if (pickHits.length > 0) {
-        const name = builtOffice.resolvePick(pickHits[0]);
-        if (name) setSelectedProject(name);
+        const name = projectPicks.includes(pickHits[0].object) ? builtOffice.resolvePick(pickHits[0]) : null;
+        if (name) {
+          setSelectedProject(name);
+          setInfoTarget(null);
+        } else {
+          // PC, tablero, pantalla o librero: abre su panel (aunque esté vacío)
+          const info = builtOffice.resolveInfo(pickHits[0]);
+          if (info) {
+            setInfoTarget(info);
+            setSelectedProject(null);
+          }
+        }
       }
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -640,8 +736,8 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
           _mv.normalize().multiplyScalar((keys.has('shift') ? 18 : 9) * dt);
           camera.position.add(_mv);
           controls.target.add(_mv);
-          const cx = THREE.MathUtils.clamp(controls.target.x, -17, 34);
-          const cz = THREE.MathUtils.clamp(controls.target.z, -17, 17);
+          const cx = THREE.MathUtils.clamp(controls.target.x, -36, 28);
+          const cz = THREE.MathUtils.clamp(controls.target.z, -19, 19);
           const cy = THREE.MathUtils.clamp(controls.target.y, 0, 6);
           camera.position.add(_deltaVec.set(cx - controls.target.x, cy - controls.target.y, cz - controls.target.z));
           controls.target.set(cx, cy, cz);
@@ -727,6 +823,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         onContextRestored
       );
       officeRef.current = null;
+      navRef.current = null;
       builtOffice.dispose();
       contactShadowTex.dispose();
       envRT.dispose();
@@ -792,6 +889,42 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     });
   }, [tasks]);
 
+  // Datos reales para pantallas, tableros y librerías de toda la oficina
+  useEffect(() => {
+    const stageCount = (st: string) => tasks.filter((t) => t.stage === st).length;
+    officeRef.current?.setOfficeStats({
+      online: agents.length > 0,
+      agents: agents.map((a) => ({
+        name: a.name,
+        title: a.title,
+        isCTO: !!a.isCTO,
+        status: a.status,
+        task: a.currentTask,
+        done: tasks.filter((t) => t.assigneeId === a.id && t.stage === 'completed').length,
+        active: tasks.filter(
+          (t) => t.assigneeId === a.id && (t.stage === 'in_dev' || t.stage === 'sheldon_review')
+        ).length,
+        tokens: a.tokensSavedToday,
+        ramKb: a.ramKb,
+      })),
+      stages: {
+        backlog: stageCount('backlog'),
+        in_dev: stageCount('in_dev'),
+        sheldon_review: stageCount('sheldon_review'),
+        ceo_approval: stageCount('ceo_approval'),
+        completed: stageCount('completed'),
+      },
+      projects: projectInfos.map((p) => ({
+        name: p.name,
+        total: p.tasks.length,
+        done: p.tasks.filter((t) => t.stage === 'completed').length,
+      })),
+      inDevTitles: tasks.filter((t) => t.stage === 'in_dev').map((t) => t.title),
+      backlogTitles: tasks.filter((t) => t.stage === 'backlog').map((t) => t.title),
+      approvalTitles: tasks.filter((t) => t.stage === 'ceo_approval').map((t) => t.title),
+    });
+  }, [agents, tasks, projectInfos]);
+
   useEffect(() => {
     officeRef.current?.setBoardroomSeats(agents.length);
   }, [agents.length]);
@@ -804,12 +937,13 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     const shadowTex = shadowTexRef.current;
     if (!scene || !shadowTex) return;
 
-    const slots = assignZoneSlots(agents, meeting, tasks);
+    const sceneAgents = [...agents, CEO_AGENT];
+    const slots = assignZoneSlots(sceneAgents, meeting && !globalMode, tasks, globalMode, ceoMeeting && !meeting && !globalMode);
     const rigs = rigsRef.current;
     const owners = labDeskAgents(agents);
 
     // Agentes archivados o eliminados: se retiran de la escena.
-    const liveIds = new Set(agents.map((a) => a.id));
+    const liveIds = new Set(sceneAgents.map((a) => a.id));
     rigs.forEach((rig, id) => {
       if (liveIds.has(id)) return;
       scene.remove(rig.root);
@@ -823,29 +957,37 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
       rigs.delete(id);
     });
 
-    agents.forEach((agent) => {
+    sceneAgents.forEach((agent) => {
       const slot = slots.get(agent.id) ?? { x: 0, z: 0, yaw: 0 };
       const existing = rigs.get(agent.id);
+      // Con un estado global activo, todos quedan en pausa (sin trabajar), sea cual sea su estado real
+      const effStatus: AgentStatus = globalMode ? 'idle' : agent.status;
 
       if (!existing) {
         // Newly created agent — spawn directly in their assigned zone!
-        const newRig = createAvatarRig(
+        const makeRig = isCeoAgent(agent) ? createCeoRig : createAvatarRig;
+        const newRig = makeRig(
           agent,
           shadowTex,
           new THREE.Vector3(slot.x, 0, slot.z),
           slot.yaw
         );
         newRig.selectRing.visible = agent.id === selectedIdRef.current;
+        newRig.pose = slot.pose;
+        newRig.poseY = slot.y ?? 0;
+        if (effStatus !== agent.status) setAvatarStatusColor(newRig, effStatus);
         scene.add(newRig.root);
         rigs.set(agent.id, newRig);
         lastTaskRef.current.set(agent.id, agent.currentTask);
       } else {
         const targetVec = new THREE.Vector3(slot.x, 0, slot.z);
-        const statusChanged = existing.currentStatus !== agent.status;
+        const statusChanged = existing.currentStatus !== effStatus;
+        existing.pose = slot.pose;
+        existing.poseY = slot.y ?? 0;
         const posChanged = existing.targetPos.distanceToSquared(targetVec) > 0.04;
 
         if (statusChanged) {
-          setAvatarStatusColor(existing, agent.status);
+          setAvatarStatusColor(existing, effStatus);
         }
         // Si cambió su tarea estando en su puesto: va a los tableros, entrega la vieja,
         // toma la nueva y vuelve
@@ -854,6 +996,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         const deskIdx = owners.indexOf(agent);
         const swapTask =
           !meeting &&
+          !globalMode &&
           agent.status === 'working' &&
           deskIdx >= 0 &&
           deskIdx < 9 &&
@@ -868,11 +1011,18 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         } else if (statusChanged || posChanged) {
           existing.targetPos.copy(targetVec);
           existing.targetYaw = slot.yaw;
-          existing.waypoints = buildWaypoints(existing.root.position, targetVec);
+          // Camino real entre muebles y paredes; si no hay ruta se usa el de respaldo por puertas
+          const route = navRef.current?.findPath(
+            { x: existing.root.position.x, z: existing.root.position.z },
+            { x: targetVec.x, z: targetVec.z }
+          );
+          existing.waypoints = route
+            ? route.map((p) => new THREE.Vector3(p.x, 0, p.z))
+            : buildWaypoints(existing.root.position, targetVec);
         }
       }
     });
-  }, [agents, meeting]);
+  }, [agents, meeting, globalMode, ceoMeeting]);
 
 
 
@@ -942,8 +1092,9 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
           </div>
         ))}
 
-        {agents.map((agent) => {
-          const isSelected = agent.id === selectedAgentId;
+        {[...agents, CEO_AGENT].map((agent) => {
+          const isCeo = isCeoAgent(agent);
+          const isSelected = !isCeo && agent.id === selectedAgentId;
           const statusColor = STATUS_META[agent.status].color;
           return (
             <button
@@ -953,7 +1104,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
                 if (el) labelRefs.current.set(agent.id, el);
                 else labelRefs.current.delete(agent.id);
               }}
-              onClick={() => setSelectedAgentId(agent.id)}
+              onClick={() => !isCeo && setSelectedAgentId(agent.id)}
               className={`absolute left-0 top-0 flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium shadow-md transition-colors will-change-transform ${
                 isSelected
                   ? 'border-cyan-400 bg-[#0B1B30] text-white'
@@ -965,7 +1116,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: statusColor }}
               />
-              <span className="whitespace-nowrap">{agent.name}</span>
+              <span className={`whitespace-nowrap ${isCeo ? 'font-semibold text-amber-300' : ''}`}>{agent.name}</span>
               {agent.isCTO && (
                 <span className="font-mono text-[9px] text-amber-400">CTO</span>
               )}
@@ -980,7 +1131,10 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         onClick={() => {
           const next = !meeting;
           setMeeting(next);
-          if (next) flyToPreset('sala_juntas');
+          if (next) {
+            setCeoMeeting(false);
+            flyToPreset('sala_juntas');
+          }
         }}
         className={`absolute left-4 top-[66px] z-20 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-lg transition-colors ${
           meeting
@@ -990,6 +1144,76 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
       >
         {meeting ? 'Terminar junta' : 'Convocar junta'}
       </button>
+
+      {/* Estados globales: desayuno, almuerzo o dormir → todos en pausa en la zona de descanso */}
+      <div className="absolute left-[132px] top-[66px] z-20 flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            const next = !ceoMeeting;
+            setCeoMeeting(next);
+            if (next) {
+              setMeeting(false);
+              setGlobalMode(null);
+              try {
+                window.localStorage.removeItem(GLOBAL_MODE_KEY);
+              } catch {
+                /* sin almacenamiento */
+              }
+              flyToPreset('oficina_ceo');
+            }
+          }}
+          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-lg transition-colors ${
+            ceoMeeting
+              ? 'border-amber-400 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'
+              : 'border-amber-500/50 bg-[#1B1408] text-amber-200 hover:bg-amber-500/15'
+          }`}
+        >
+          {ceoMeeting ? 'Terminar reunión CEO' : 'Reunión CEO'}
+        </button>
+        {(Object.keys(GLOBAL_MODE_META) as Array<Exclude<GlobalMode, null>>).map((m) => {
+          const active = globalMode === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                const next = active ? null : m;
+                setGlobalMode(next);
+                try {
+                  if (next) window.localStorage.setItem(GLOBAL_MODE_KEY, next);
+                  else window.localStorage.removeItem(GLOBAL_MODE_KEY);
+                } catch {
+                  /* sin almacenamiento: el estado solo dura la sesión */
+                }
+                if (next) {
+                  setMeeting(false);
+                  setCeoMeeting(false);
+                  flyToPreset('zona_descanso');
+                }
+              }}
+              className={`rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-lg transition-colors ${
+                active
+                  ? 'border-violet-400 bg-violet-500/25 text-violet-100 hover:bg-violet-500/35'
+                  : 'border-slate-600 bg-[#0B1B30] text-slate-200 hover:bg-slate-700/60'
+              }`}
+            >
+              {GLOBAL_MODE_META[m].label}
+            </button>
+          );
+        })}
+      </div>
+
+      {globalMode && (
+        <div className="absolute left-1/2 top-[110px] z-20 -translate-x-1/2 rounded-xl border border-violet-500/50 bg-[#150F2E]/95 px-4 py-2 text-xs text-violet-100 shadow-xl">
+          <span className="font-mono text-[10px] tracking-wider text-violet-300">ESTADO GLOBAL · </span>
+          <span className="font-semibold">{GLOBAL_MODE_META[globalMode].label.toUpperCase()}</span>
+          <span className="text-violet-200/80">
+            {' '}
+            — agentes en pausa: {GLOBAL_MODE_META[globalMode].detail}
+          </span>
+        </div>
+      )}
 
       {meeting && (
         <div className="absolute bottom-4 left-4 z-20 w-80 rounded-2xl border border-slate-700 bg-[#0B1220]/95 p-4 text-xs shadow-xl">
@@ -1019,9 +1243,85 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         </div>
       )}
 
+      {/* Reunión con el CEO: Sheldon y Leonard vienen a su oficina, reportan y responden preguntas */}
+      {ceoMeeting && !meeting && !globalMode && (
+        <MeetingChat
+          mode="ceo"
+          participants={agents.filter((a) => a.isCTO || isSenior(a))}
+          reports={
+            agents
+              .filter((a) => a.isCTO || isSenior(a))
+              .map((a): MeetingReport => ({
+                agent: a,
+                done: tasks.filter((t) => t.assigneeId === a.id && t.stage === 'completed').length,
+                active: tasks.filter(
+                  (t) => t.assigneeId === a.id && (t.stage === 'in_dev' || t.stage === 'sheldon_review')
+                ).length,
+              }))
+          }
+          rightOffset={isRightPanelCollapsed ? 16 : 408}
+          onClose={() => setCeoMeeting(false)}
+        />
+      )}
+
+      {/* Junta general: preguntas a todo el equipo */}
+      {meeting && !globalMode && (
+        <MeetingChat
+          mode="junta"
+          participants={agents}
+          rightOffset={isRightPanelCollapsed ? 16 : 408}
+          onClose={() => setMeeting(false)}
+        />
+      )}
+
       <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 lg:block">
         WASD / flechas: moverse · Q/E: bajar/subir · Shift: rápido · clic derecho: desplazar · rueda: zoom
       </div>
+
+      {/* Información del equipo, tablero, pantalla o librero seleccionado (aunque esté vacío) */}
+      {infoTarget && (
+        <div className="absolute left-4 top-28 z-20 max-h-[70vh] w-80 overflow-y-auto rounded-2xl border border-slate-700 bg-[#0B1220]/95 p-4 text-xs shadow-xl">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-mono text-[10px] tracking-wider text-cyan-400">
+                {infoTarget.section.toUpperCase()}
+              </div>
+              <div className="mt-0.5 text-sm font-semibold text-slate-100">{infoTarget.title}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInfoTarget(null)}
+              className="rounded-md px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+              aria-label="Cerrar información"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="mt-2 text-slate-400">{infoTarget.description}</p>
+          {infoTarget.images.map((src, i) => (
+            <img
+              key={i}
+              src={src}
+              alt={infoTarget.title}
+              className="mt-3 w-full rounded-lg border border-slate-700 bg-black"
+            />
+          ))}
+          {infoTarget.lines.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {infoTarget.lines.map((ln, i) => (
+                <li key={i} className="rounded-md border border-slate-800 bg-[#080E1A] px-2.5 py-1.5 text-slate-200">
+                  {ln}
+                </li>
+              ))}
+            </ul>
+          )}
+          {infoTarget.empty && (
+            <div className="mt-3 rounded-lg border border-dashed border-slate-600 px-3 py-3 text-center text-slate-500">
+              Aún no hay información. Este es el apartado donde se mostrará a medida que se gestione.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Información del proyecto seleccionado (clic en un tablero o en un libro), a los lados */}
       {activeProject && (

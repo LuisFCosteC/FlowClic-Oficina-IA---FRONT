@@ -395,9 +395,10 @@ export default function App() {
       />
 
       {/* Right Main Workspace */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Clean Single-Row Top Bar */}
-        <header className="flex h-16 shrink-0 items-center justify-between gap-6 border-b border-slate-800/75 bg-[#0A101C]/90 px-5 lg:px-8">
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* La Oficina 3D usa todo el espacio: solo queda la barra lateral izquierda */}
+        {activeModule === 'colmena3d' && (<button type="button" aria-label="Abrir navegación" onClick={() => setMobileMenuOpen(true)} className="absolute left-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-[#0A101C]/90 text-slate-300 hover:bg-slate-800 lg:hidden">☰</button>)}
+        {activeModule !== 'colmena3d' && (<header className="flex h-16 shrink-0 items-center justify-between gap-6 border-b border-slate-800/75 bg-[#0A101C]/90 px-5 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -428,25 +429,15 @@ export default function App() {
               </span>
             </div>
 
-            {activeModule !== 'colmena3d' ? (
-              <button
-                type="button"
-                onClick={() => setActiveModule('colmena3d')}
-                className="rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-xs font-medium text-cyan-200 transition-all hover:-translate-y-0.5 hover:bg-cyan-500/20 active:translate-y-0 active:scale-95 whitespace-nowrap shrink-0"
-              >
-                Ver Oficina 3D
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setActiveModule('cerebro')}
-                className="rounded-xl border border-slate-700/80 bg-slate-900/90 px-4 py-2 text-xs font-medium text-slate-200 transition-all hover:-translate-y-0.5 hover:border-cyan-500/60 hover:text-cyan-200 active:translate-y-0 active:scale-95 whitespace-nowrap shrink-0"
-              >
-                Abrir Cerebro FlowClic
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setActiveModule('colmena3d')}
+              className="rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-4 py-2 text-xs font-medium text-cyan-200 transition-all hover:-translate-y-0.5 hover:bg-cyan-500/20 active:translate-y-0 active:scale-95 whitespace-nowrap shrink-0"
+            >
+              Ver Oficina 3D
+            </button>
           </div>
-        </header>
+        </header>)}
 
         {banner && (
           <div

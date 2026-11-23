@@ -10,9 +10,36 @@ export type TicketStatus =
   | 'DONE'
   | 'RETURNED';
 
-export type HairStyle = 'short' | 'long' | 'curly' | 'bun' | 'parted';
+export type HairStyle =
+  | 'short'
+  | 'long'
+  | 'curly'
+  | 'bun'
+  | 'parted'
+  | 'ponytail'
+  | 'spiky'
+  | 'bob'
+  | 'bald';
+export type Gender = 'male' | 'female' | 'neutral';
+export type FaceStyle = 'neutral' | 'smile' | 'serious' | 'worried';
+export type TopStyle = 'tshirt' | 'jacket' | 'hoodie' | 'suit' | 'dress';
+export type PantsStyle = 'pants' | 'shorts' | 'skirt';
 
-export interface AgentAvatarProfile {
+/** Apariencia completa del personaje (todo opcional: lo no definido usa el aspecto por defecto). */
+export interface AvatarLook {
+  gender?: Gender;
+  skinTone?: string;
+  hairColor?: string;
+  face?: FaceStyle;
+  topStyle?: TopStyle;
+  topColor?: string;
+  innerColor?: string;
+  pantsStyle?: PantsStyle;
+  pantsColor?: string;
+  shoeColor?: string;
+}
+
+export interface AgentAvatarProfile extends AvatarLook {
   color: string;
   glasses?: boolean;
   hairStyle?: HairStyle;

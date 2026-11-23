@@ -3,6 +3,7 @@ import { Agent, AgentStatus } from '../../types/orbis';
 import {
   createAgentLegoTorsoTexture,
   createCeoTorsoTexture,
+  createOutfitTorsoTexture,
   createFlashTorsoTexture,
   createLegoFaceTexture,
 } from './proceduralTextures';
@@ -25,6 +26,10 @@ export interface AvatarRig {
   targetPos: THREE.Vector3;
   targetYaw: number;
   labelAnchorY: number;
+  /** Pose del puesto actual: sentado (silla, puf, sofá) o acostado (cama). */
+  pose?: 'sit' | 'lie';
+  /** Altura del cuerpo para apoyarse en el asiento o el colchón. */
+  poseY: number;
 }
 
 const STATUS_HEX: Record<AgentStatus, number> = {
@@ -94,11 +99,19 @@ export function createAvatarRig(
   // Tonalidades de piel LEGO y materiales
   const isSheldon = agent.id === 'sheldon' || agent.isCTO;
   const skinTones = ['#f5d061', '#fcd34d', '#eab308', '#fde047'];
-  const skinToneHex = isSheldon
+  const legacySkin = isSheldon
     ? '#fcd34d'
     : skinTones[
         agent.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % skinTones.length
       ];
+  // Apariencia completa elegida en el editor del personaje (si no hay, se usa el aspecto por defecto)
+  const look = agent.look ?? {};
+  const female = look.gender === 'female';
+  const skinToneHex = look.skinTone ?? legacySkin;
+  const customOutfit = !!look.topStyle;
+  const topHex = look.topColor ?? agent.color;
+  const innerHex = look.innerColor ?? '#e2e8f0';
+  const bareLegs = look.pantsStyle === 'skirt' || look.topStyle === 'dress';
 
   const skinMat = new THREE.MeshStandardMaterial({
     color: skinToneHex,
@@ -107,13 +120,13 @@ export function createAvatarRig(
   });
 
   const pantsMat = new THREE.MeshStandardMaterial({
-    color: isSheldon ? 0x22354a : 0x1e293b,
+    color: look.pantsColor ?? (isSheldon ? 0x22354a : 0x1e293b),
     roughness: 0.35,
     metalness: 0.1,
   });
 
   const shoeMat = new THREE.MeshStandardMaterial({
-    color: 0x0f172a,
+    color: look.shoeColor ?? 0x0f172a,
     roughness: 0.3,
     metalness: 0.2,
   });
@@ -131,11 +144,17 @@ export function createAvatarRig(
     pivot.position.set(xOffset, 0.54, 0);
 
     // Pierna rectangular LEGO
+    const shorts = look.pantsStyle === 'shorts';
     const legMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.17, 0.38, 0.2),
-      pantsMat
+      new THREE.BoxGeometry(0.17, shorts ? 0.2 : 0.38, 0.2),
+      bareLegs ? skinMat : pantsMat
     );
-    legMesh.position.y = -0.19;
+    legMesh.position.y = shorts ? -0.1 : -0.19;
+    if (shorts) {
+      const lowerLeg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.18), skinMat);
+      lowerLeg.position.y = -0.29;
+      pivot.add(lowerLeg);
+    }
     legMesh.castShadow = true;
     pivot.add(legMesh);
 
@@ -162,12 +181,14 @@ export function createAvatarRig(
   torsoGeo.scale(1.2, 1, 0.72); // Silueta proporcionada LEGO
 
   // Textura frontal procedural: Flash para Sheldon, Camisa tech para agentes
-  const torsoFrontTex = isSheldon
-    ? createFlashTorsoTexture()
-    : createAgentLegoTorsoTexture(agent.color, agent.name);
+  const torsoFrontTex = customOutfit
+    ? createOutfitTorsoTexture(look.topStyle!, topHex, innerHex, female)
+    : isSheldon
+      ? createFlashTorsoTexture()
+      : createAgentLegoTorsoTexture(agent.color, agent.name);
 
   const torsoMatSide = new THREE.MeshStandardMaterial({
-    color: isSheldon ? 0xd92525 : new THREE.Color(agent.color),
+    color: customOutfit ? new THREE.Color(topHex) : isSheldon ? 0xd92525 : new THREE.Color(agent.color),
     roughness: 0.32,
     metalness: 0.08,
   });
@@ -194,6 +215,30 @@ export function createAvatarRig(
   torso.receiveShadow = true;
   bodyGroup.add(torso);
 
+  // Vestido / falda: cubre las caderas (las piernas se ven con la piel)
+  if (look.pantsStyle === 'skirt' || look.topStyle === 'dress') {
+    const skirt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.3, 0.34, 20),
+      new THREE.MeshStandardMaterial({
+        color: look.topStyle === 'dress' ? topHex : (look.pantsColor ?? '#1e293b'),
+        roughness: 0.45,
+      })
+    );
+    skirt.position.y = 0.44;
+    skirt.castShadow = true;
+    bodyGroup.add(skirt);
+  }
+  // Capucha de la sudadera
+  if (look.topStyle === 'hoodie') {
+    const hood = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 12, 10),
+      new THREE.MeshStandardMaterial({ color: topHex, roughness: 0.5 })
+    );
+    hood.scale.set(1.45, 0.7, 0.8);
+    hood.position.set(0, 1.1, -0.1);
+    bodyGroup.add(hood);
+  }
+
   // Cuello cilíndrico LEGO
   const neckGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.09, 16);
   const neck = new THREE.Mesh(neckGeo, skinMat);
@@ -206,7 +251,7 @@ export function createAvatarRig(
     const xOffset = isLeft ? -0.27 : 0.27;
     pivot.position.set(xOffset, 1.05, 0);
 
-    const armColor = isSheldon ? 0xd92525 : new THREE.Color(agent.color);
+    const armColor = customOutfit ? new THREE.Color(topHex) : isSheldon ? 0xd92525 : new THREE.Color(agent.color);
     const sleeveMat = new THREE.MeshStandardMaterial({
       color: armColor,
       roughness: 0.35,
@@ -226,9 +271,13 @@ export function createAvatarRig(
     // Antebrazo inclinado hacia el frente
     const forearm = new THREE.Mesh(
       new THREE.CylinderGeometry(0.058, 0.058, 0.16, 12),
-      isSheldon
-        ? new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.35 })
-        : sleeveMat
+      customOutfit
+        ? look.topStyle === 'tshirt' || look.topStyle === 'dress'
+          ? skinMat
+          : sleeveMat
+        : isSheldon
+          ? new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.35 })
+          : sleeveMat
     );
     forearm.position.set(0, -0.26, 0.04);
     forearm.rotation.x = 0.32;
@@ -266,7 +315,11 @@ export function createAvatarRig(
   headGroup.position.y = 1.15;
   bodyGroup.add(headGroup);
 
-  const headFaceTex = createLegoFaceTexture(skinToneHex, isSheldon);
+  const headFaceTex = createLegoFaceTexture(
+    skinToneHex,
+    isSheldon,
+    look.face || female ? { face: look.face, female } : undefined
+  );
   const headSideMat = new THREE.MeshStandardMaterial({
     color: skinToneHex,
     roughness: 0.3,
@@ -296,7 +349,9 @@ export function createAvatarRig(
 
   // Cabello / Peinado LEGO
   const hairColors = [0x1c1917, 0x3b2618, 0x5c3c24, 0xd4a259, 0x4b5563];
-  const hairColor = isSheldon
+  const hairColor = look.hairColor
+    ? new THREE.Color(look.hairColor).getHex()
+    : isSheldon
     ? 0x3b2618
     : agent.id === 'penny' || agent.id === 'bernadette'
       ? 0xd9b25f
@@ -319,9 +374,9 @@ export function createAvatarRig(
   hairCap.position.y = 0.24;
   hairCap.scale.set(1.05, 0.85, 1.05);
   hairCap.castShadow = true;
-  headGroup.add(hairCap);
+  if (style !== 'bald') headGroup.add(hairCap);
 
-  if (style === 'parted' || isSheldon) {
+  if (style === 'parted' || (isSheldon && !agent.hairStyle)) {
     // Flequillo lateral icónico
     const bang = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.06), hairMat);
     bang.position.set(-0.06, 0.28, 0.14);
@@ -343,6 +398,29 @@ export function createAvatarRig(
     puff.scale.set(1.08, 0.9, 1.08);
     puff.position.set(0, 0.25, -0.01);
     headGroup.add(puff);
+  } else if (style === 'ponytail') {
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.035, 0.34, 10), hairMat);
+    tail.position.set(0, 0.12, -0.2);
+    tail.rotation.x = 0.35;
+    const tie = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), hairMat);
+    tie.position.set(0, 0.27, -0.17);
+    headGroup.add(tail, tie);
+  } else if (style === 'spiky') {
+    [-0.1, 0, 0.1].forEach((px, i) => {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 8), hairMat);
+      spike.position.set(px, 0.38 - Math.abs(px) * 0.4, i === 1 ? 0.02 : -0.02);
+      spike.rotation.z = -px * 2.5;
+      headGroup.add(spike);
+    });
+  } else if (style === 'bob') {
+    [-1, 1].forEach((sx) => {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.3), hairMat);
+      side.position.set(sx * 0.18, 0.13, -0.02);
+      headGroup.add(side);
+    });
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.2, 0.08), hairMat);
+    back.position.set(0, 0.13, -0.15);
+    headGroup.add(back);
   }
 
   // Gafas opcionales (Leonard, Amy, etc.)
@@ -430,6 +508,7 @@ export function createAvatarRig(
     targetPos: initialPos.clone(),
     targetYaw: initialYaw,
     labelAnchorY: 1.88,
+    poseY: 0,
   };
 }
 
@@ -437,7 +516,7 @@ export function createAvatarRig(
  * Construye la figura emblemática del CEO estilo minifigura LEGO presidencial.
  * Sentado tras su escritorio monumental o de pie como autoridad máxima.
  */
-export function buildCeoFigure(isSeated = true): THREE.Group {
+export function buildCeoParts(isSeated = false) {
   const root = new THREE.Group();
 
   const skinMat = new THREE.MeshStandardMaterial({
@@ -497,8 +576,9 @@ export function buildCeoFigure(isSeated = true): THREE.Group {
     return legGroup;
   };
 
-  bodyGroup.add(buildCeoLeg(-0.11));
-  bodyGroup.add(buildCeoLeg(0.11));
+  const leftLeg = buildCeoLeg(-0.11);
+  const rightLeg = buildCeoLeg(0.11);
+  bodyGroup.add(leftLeg, rightLeg);
 
   // Torso Ejecutivo del CEO con textura de traje, camisa, corbata azul y pañuelo
   const torsoGeo = new THREE.CylinderGeometry(0.19, 0.26, 0.5, 4, 1);
@@ -575,8 +655,9 @@ export function buildCeoFigure(isSeated = true): THREE.Group {
     return armGroup;
   };
 
-  bodyGroup.add(buildCeoArm(true));
-  bodyGroup.add(buildCeoArm(false));
+  const leftArm = buildCeoArm(true);
+  const rightArm = buildCeoArm(false);
+  bodyGroup.add(leftArm, rightArm);
 
   // Cabeza Cilíndrica LEGO con Rostro Decidido del CEO
   const headGroup = new THREE.Group();
@@ -631,7 +712,34 @@ export function buildCeoFigure(isSeated = true): THREE.Group {
   hairTop.position.set(0, 0.32, -0.02);
   headGroup.add(hairTop);
 
-  return root;
+  return { root, bodyGroup, leftLeg, rightLeg, leftArm, rightArm, headGroup };
+}
+
+export function buildCeoFigure(isSeated = true): THREE.Group {
+  return buildCeoParts(isSeated).root;
+}
+
+/**
+ * Avatar móvil del CEO: usa el cuerpo presidencial (traje y corbata) con las mismas articulaciones
+ * que los demás personajes, para caminar, sentarse y acostarse con la misma animación.
+ */
+export function createCeoRig(
+  agent: Agent,
+  contactShadowTex: THREE.CanvasTexture,
+  initialPos: THREE.Vector3,
+  initialYaw: number
+): AvatarRig {
+  const rig = createAvatarRig(agent, contactShadowTex, initialPos, initialYaw);
+  const parts = buildCeoParts(false);
+  rig.root.remove(rig.bodyGroup);
+  rig.root.add(parts.bodyGroup);
+  rig.bodyGroup = parts.bodyGroup;
+  rig.leftLegPivot = parts.leftLeg;
+  rig.rightLegPivot = parts.rightLeg;
+  rig.leftArmPivot = parts.leftArm;
+  rig.rightArmPivot = parts.rightArm;
+  rig.headGroup = parts.headGroup;
+  return rig;
 }
 
 export function setAvatarStatusColor(rig: AvatarRig, status: AgentStatus): void {
@@ -650,6 +758,29 @@ export function updateAvatarAnimation(
   phaseOffset: number
 ): void {
   const t = elapsed + phaseOffset;
+
+  // Poses de descanso: sentado en silla/puf/sofá o acostado en la cama (solo cuando no camina)
+  const lying = !isMoving && rig.pose === 'lie';
+  const sitting = !isMoving && rig.pose === 'sit';
+  rig.bodyGroup.rotation.x = THREE.MathUtils.damp(rig.bodyGroup.rotation.x, lying ? -Math.PI / 2 : 0, 9, dt);
+  rig.bodyGroup.position.z = THREE.MathUtils.damp(rig.bodyGroup.position.z, lying ? 0.75 : 0, 9, dt);
+  if (lying || sitting) {
+    const to = (o: THREE.Group, target: number, k: number) => {
+      o.rotation.x = THREE.MathUtils.damp(o.rotation.x, target, k, dt);
+    };
+    to(rig.leftLegPivot, lying ? 0 : -1.45, 9);
+    to(rig.rightLegPivot, lying ? 0 : -1.45, 9);
+    to(rig.leftArmPivot, lying ? 0 : -0.6, 9);
+    to(rig.rightArmPivot, lying ? 0 : -0.6, 9);
+    rig.bodyGroup.position.y = THREE.MathUtils.damp(rig.bodyGroup.position.y, rig.poseY, 8, dt);
+    rig.headGroup.rotation.y = THREE.MathUtils.damp(
+      rig.headGroup.rotation.y,
+      lying ? 0 : Math.sin(t * 0.6) * 0.1,
+      5,
+      dt
+    );
+    return;
+  }
 
   if (isMoving) {
     // Natural walking gait

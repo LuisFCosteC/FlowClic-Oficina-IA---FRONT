@@ -3,9 +3,15 @@ import type {
   AgentModelConfig,
   AgentPermissions,
   HairStyle,
+  AvatarLook,
 } from '../types/agentProfile';
 
 /** DTOs de la API (PLAN §6 y §19). Todo en camelCase, tal como responde la API. */
+
+/** Avatar tal como lo devuelve/acepta la API: todo lo opcional puede venir como null. */
+export type ApiAvatar = { color: string; glasses?: boolean | null; hairStyle?: HairStyle | null } & {
+  [K in keyof AvatarLook]?: AvatarLook[K] | null;
+};
 
 export type ApiAgentStatus =
   | 'IDLE'
@@ -55,7 +61,7 @@ export interface ApiAgent {
   role: string;
   roleType: ApiRoleType;
   status: ApiAgentStatus;
-  avatar: { color: string; glasses?: boolean | null; hairStyle?: HairStyle | null };
+  avatar: ApiAvatar;
   functions: string[];
   rules: string[];
   restrictions: string[];
@@ -122,7 +128,7 @@ export interface ApiAgentCreate {
   role: string;
   roleType?: ApiRoleType;
   character?: string;
-  avatar?: { color: string; glasses?: boolean | null; hairStyle?: HairStyle | null };
+  avatar?: ApiAvatar;
   functions?: string[];
   rules?: string[];
   restrictions?: string[];
