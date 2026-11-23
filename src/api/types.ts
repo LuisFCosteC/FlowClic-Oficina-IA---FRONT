@@ -124,6 +124,29 @@ export interface ApiUserUpdate {
   disabled?: boolean;
 }
 
+export interface ApiDbInfo {
+  mode: 'local' | 'remote';
+  host: string;
+  connected: boolean;
+  schemaVersion: number;
+  hasToken: boolean;
+  lastBackupAt: string | null;
+}
+
+export interface ApiDbTestResult {
+  ok: boolean;
+  mode: 'local' | 'remote';
+  host: string;
+  schemaVersion: number | null;
+  willCreate: boolean;
+}
+
+export interface ApiDbBackupResult {
+  folder: string;
+  tables: Record<string, number>;
+  createdAt: string;
+}
+
 export type ApiRuleSeverity = 'MUST' | 'SHOULD';
 
 export interface ApiRule {

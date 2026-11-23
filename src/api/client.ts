@@ -14,6 +14,9 @@ import type {
   ApiAdminUser,
   ApiUserCreate,
   ApiUserUpdate,
+  ApiDbInfo,
+  ApiDbTestResult,
+  ApiDbBackupResult,
   ApiRule,
   ApiRuleCreate,
   ApiRuleUpdate,
@@ -132,6 +135,13 @@ export const api = {
     request<ApiAdminUser>('POST', '/api/admin/users', body),
   updateUser: (id: string, body: ApiUserUpdate) =>
     request<ApiAdminUser>('PATCH', `/api/admin/users/${encodeURIComponent(id)}`, body),
+
+  getDbInfo: () => request<ApiDbInfo>('GET', '/api/admin/db'),
+  testDbConnection: (body: { url: string; authToken?: string }) =>
+    request<ApiDbTestResult>('POST', '/api/admin/db/test', body),
+  updateDbConnection: (body: { url: string; authToken?: string }) =>
+    request<ApiDbInfo>('PUT', '/api/admin/db', body),
+  createBackup: () => request<ApiDbBackupResult>('POST', '/api/admin/backup'),
 
   createTicket: (body: ApiTicketCreate) => request<ApiTicket>('POST', '/api/tickets', body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>

@@ -15,12 +15,12 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { agentFromApi, formatDate } from '../api/mappers';
-import type { ApiSetupStatus } from '../api/types';
 import { Agent } from '../types/orbis';
 import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
 import { AuditPanel } from './AuditPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
+import { DbConnectionPanel } from './DbConnectionPanel';
 import { LimitsPanel } from './LimitsPanel';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { RulesPanel } from './RulesPanel';
@@ -58,23 +58,12 @@ interface AdminViewProps {
   onOpenEditAgent: (agent: Agent) => void;
 }
 
-type DbState =
-  | { kind: 'loading' }
-  | { kind: 'ok'; status: ApiSetupStatus }
-  | { kind: 'unreachable' }
-  | { kind: 'setup'; message: string }
-  | { kind: 'error'; message: string };
-
-const yesNo = (v: boolean | undefined): string =>
-  v === undefined ? 'No disponible' : v ? 'Sí' : 'No';
-
 export const AdminView: React.FC<AdminViewProps> = ({
   agents,
   onOpenCreateAgent,
   onOpenEditAgent,
 }) => {
   const [tab, setTab] = useState<AdminTab>('agents');
-  const [db, setDb] = useState<DbState>({ kind: 'loading' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ADM03: Agentes archivados y gestión
@@ -113,25 +102,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
       void loadAgentsList(showArchived);
     }
   }, [tab, showArchived, loadAgentsList]);
-
-  const refreshDb = useCallback(async () => {
-    setDb({ kind: 'loading' });
-    try {
-      setDb({ kind: 'ok', status: await api.setupStatus() });
-    } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.status === 0) setDb({ kind: 'unreachable' });
-        else if (err.code === 'SETUP_REQUIRED') setDb({ kind: 'setup', message: err.message });
-        else setDb({ kind: 'error', message: err.message });
-      } else {
-        setDb({ kind: 'error', message: 'Error inesperado.' });
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (tab === 'db') void refreshDb();
-  }, [tab, refreshDb]);
 
   const handleExecuteAction = async () => {
     if (!actionModal) return;
@@ -215,79 +185,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
         {tab === 'audit' && <AuditPanel />}
 
-        {tab === 'db' && (
-          <section className="max-w-3xl rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <Database className="h-4 w-4 text-cyan-400" />
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Conexión de base de datos
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => void refreshDb()}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Actualizar
-              </button>
-            </div>
-
-            <div className="mt-4 text-xs">
-              {db.kind === 'loading' && <p className="text-slate-500">Consultando la API…</p>}
-              {db.kind === 'unreachable' && (
-                <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-rose-300">
-                  La API no responde. Comprueba que el servidor esté en marcha.
-                </p>
-              )}
-              {db.kind === 'setup' && (
-                <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-amber-300">
-                  {db.message || 'La API está en modo SETUP: falta configurar la base de datos.'}
-                </p>
-              )}
-              {db.kind === 'error' && (
-                <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-rose-300">
-                  {db.message}
-                </p>
-              )}
-              {db.kind === 'ok' && (
-                <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5">
-                  <dt className="text-slate-400">Estado</dt>
-                  <dd
-                    className={
-                      db.status.setupRequired ? 'text-amber-400' : 'text-emerald-400'
-                    }
-                  >
-                    {db.status.setupRequired
-                      ? 'Configuración inicial pendiente (modo SETUP)'
-                      : 'Configurada y operativa'}
-                  </dd>
-                  <dt className="text-slate-400">Base de datos conectada</dt>
-                  <dd className="text-slate-200">
-                    {db.status.hasDatabase !== undefined
-                      ? yesNo(db.status.hasDatabase)
-                      : db.status.setupRequired
-                        ? 'No disponible'
-                        : 'Sí'}
-                  </dd>
-                  <dt className="text-slate-400">Administrador creado</dt>
-                  <dd className="text-slate-200">
-                    {db.status.hasAdmin !== undefined
-                      ? yesNo(db.status.hasAdmin)
-                      : db.status.setupRequired
-                        ? 'No disponible'
-                        : 'Sí'}
-                  </dd>
-                </dl>
-              )}
-            </div>
-            <p className="mt-4 text-[11px] text-slate-500">
-              La URL y el token de la base de datos se guardan cifrados en el servidor y
-              nunca se muestran aquí.
-            </p>
-          </section>
-        )}
+        {tab === 'db' && <DbConnectionPanel />}
 
         {tab === 'agents' && (
           <section className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90">
