@@ -8,6 +8,7 @@ import {
   ChevronRight,
   KanbanSquare,
   Plus,
+  ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -55,6 +56,12 @@ const NAV_ITEMS: Array<{
     label: 'Oficina IA 3D',
     sublabel: 'Vista Isométrica Viva',
     icon: Box,
+  },
+  {
+    id: 'admin',
+    label: 'Administración',
+    sublabel: 'Conexión BD y Agentes',
+    icon: ShieldCheck,
   },
 ];
 

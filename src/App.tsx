@@ -27,6 +27,7 @@ import { CerebroOrbisView } from './components/CerebroOrbisView';
 import { KanbanPipelineView } from './components/KanbanPipelineView';
 import { RoadmapCalendarView } from './components/RoadmapCalendarView';
 import { CreateAgentModal } from './components/CreateAgentModal';
+import { AdminView } from './components/AdminView';
 
 const MODULE_HEADERS: Record<
   ActiveModule,
@@ -47,6 +48,10 @@ const MODULE_HEADERS: Record<
   colmena3d: {
     breadcrumb: 'FlowClic Oficina IA / Vista Principal 3D',
     title: 'Oficina IA 3D',
+  },
+  admin: {
+    breadcrumb: 'FlowClic Oficina IA / Sistema',
+    title: 'Administración',
   },
 };
 
@@ -414,6 +419,21 @@ export default function App() {
                   agents={agents}
                   onUpdateProjectDates={handleUpdateProjectDates}
                   onAddMilestone={handleAddMilestone}
+                />
+              </motion.div>
+            )}
+            {activeModule === 'admin' && (
+              <motion.div
+                key="admin"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full w-full"
+              >
+                <AdminView
+                  agents={agents}
+                  onOpenCreateAgent={() => setCreateAgentOpen(true)}
                 />
               </motion.div>
             )}

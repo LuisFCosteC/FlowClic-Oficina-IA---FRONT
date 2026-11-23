@@ -1,4 +1,4 @@
-export type ActiveModule = 'kanban' | 'roadmap' | 'cerebro' | 'colmena3d';
+export type ActiveModule = 'kanban' | 'roadmap' | 'cerebro' | 'colmena3d' | 'admin';
 
 export type AgentStatus = 'working' | 'waiting_sheldon' | 'idle';
 
