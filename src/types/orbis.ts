@@ -1,6 +1,13 @@
+import type { ApiTicketStatus } from '../api/types';
+
 export type ActiveModule = 'kanban' | 'roadmap' | 'cerebro' | 'colmena3d' | 'admin';
 
-export type AgentStatus = 'working' | 'waiting_sheldon' | 'idle';
+export type AgentStatus =
+  | 'working'
+  | 'waiting_sheldon'
+  | 'idle'
+  | 'blocked'
+  | 'sleep_quota';
 
 export type ModelTier = 'opus_pro' | 'sonnet_pro' | 'haiku_flash';
 
@@ -76,6 +83,31 @@ export interface KanbanTask {
   priority: TaskPriority;
   estimatedCostUsd: number;
   updatedAt: string;
+  /** Estado exacto del ticket en la API (la columna `stage` lo resume). */
+  apiStatus?: ApiTicketStatus;
+  /** Ticket devuelto (RETURNED): está en la columna En Desarrollo con la etiqueta "Devuelta". */
+  returned?: boolean;
+}
+
+/** Datos del formulario "Nueva tarea": la API siempre crea el ticket en PENDIENTE. */
+export interface NewTaskInput {
+  title: string;
+  description: string;
+  project: string;
+  assigneeId: string;
+  modelTier: ModelTier;
+  priority: TaskPriority;
+}
+
+/** Datos del modal "Crear agente". */
+export interface NewAgentInput {
+  name: string;
+  title: string;
+  description: string;
+  modelTier: ModelTier;
+  color: string;
+  glasses: boolean;
+  project: string;
 }
 
 export interface ProjectMilestone {
