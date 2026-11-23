@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, UserPlus, X } from 'lucide-react';
-import { Agent, AgentStatus, ModelTier } from '../types/orbis';
-import { MODEL_TIER_META, PROJECT_NAMES } from '../data/initialData';
+import { ModelTier, NewAgentInput } from '../types/orbis';
+import { MODEL_TIER_META } from '../data/initialData';
 
 interface CreateAgentModalProps {
   open: boolean;
   onClose: () => void;
-  onCreateAgent: (agent: Agent) => void;
+  /** Crea el agente en la API. Devuelve el mensaje de error, o `null` si salió bien. */
+  onCreateAgent: (input: NewAgentInput) => Promise<string | null>;
 }
 
 const AVATAR_SWATCHES = [
@@ -32,13 +33,13 @@ const PROMPT_PRESETS = [
     label: 'Especialista Móvil iOS/Android',
     title: 'Ingeniero Mobile Senior',
     prompt:
-      'Construyes interfaces móviles fluidas a 60 FPS, manejo seguro de biometría y sincronización offline-first para App Móvil AkinoAI.',
+      'Construyes interfaces móviles fluidas a 60 FPS, manejo seguro de biometría y sincronización offline-first.',
   },
   {
     label: 'Auditor FinOps & Cumplimiento',
     title: 'Analista FinOps & Compliance',
     prompt:
-      'Auditas eficiencia de tokens por flujo, detectas cuellos de botella de costos y validas normativas bancarias PCI-DSS y SOC2.',
+      'Auditas eficiencia de tokens por flujo, detectas cuellos de botella de costos y validas normativas de seguridad y cumplimiento.',
   },
 ];
 
@@ -52,15 +53,16 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelTier, setModelTier] = useState<ModelTier>('sonnet_pro');
   const [color, setColor] = useState<string>(AVATAR_SWATCHES[0]);
-  const [status, setStatus] = useState<AgentStatus>('working');
-  const [project, setProject] = useState<string>(PROJECT_NAMES[0]);
+  const [project, setProject] = useState<string>('');
   const [glasses, setGlasses] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [saving, setSaving] = useState<boolean>(false);
 
   if (!open) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     const trimmedName = name.trim();
     const trimmedPrompt = systemPrompt.trim();
     if (!trimmedName) {
@@ -68,35 +70,29 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
       return;
     }
     if (!trimmedPrompt) {
-      setError('Define el Rol Inmutable (System Prompt) del agente.');
+      setError('Describe las funciones del agente.');
       return;
     }
 
-    const newAgent: Agent = {
-      id: `agent-${Date.now()}`,
+    setSaving(true);
+    const apiError = await onCreateAgent({
       name: trimmedName,
       title: title.trim() || 'Especialista Autónomo',
-      systemPrompt: trimmedPrompt,
+      description: trimmedPrompt,
       modelTier,
       color,
-      status,
-      ramKb: status === 'idle' ? 0 : 186000,
-      currentTask:
-        status === 'idle'
-          ? 'Memoria purgada — En espera de asignación'
-          : status === 'waiting_sheldon'
-            ? 'Esperando validación inicial con Sheldon'
-            : `Integración inicial en ${project}`,
-      project,
-      tokensSavedToday: 12400,
       glasses,
-      hairStyle: 'short',
-    };
-
-    onCreateAgent(newAgent);
+      project: project.trim(),
+    });
+    setSaving(false);
+    if (apiError) {
+      setError(apiError);
+      return;
+    }
     setName('');
     setTitle('');
     setSystemPrompt('');
+    setProject('');
     setError('');
     onClose();
   };
@@ -218,7 +214,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               htmlFor="agent-prompt"
               className="mb-1.5 block text-xs font-medium text-slate-300"
             >
-              Rol Inmutable (System Prompt)
+              Funciones del agente (una por línea)
             </label>
             <textarea
               id="agent-prompt"
@@ -228,7 +224,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                 setSystemPrompt(e.target.value);
                 setError('');
               }}
-              placeholder="Define las reglas inmutables, estándares técnicos y protocolo de reporte a Sheldon..."
+              placeholder="Qué hace este agente. El servidor genera el prompt y aplica las restricciones globales."
               className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 transition-colors focus:border-cyan-400 focus:outline-none"
             />
           </div>
@@ -315,39 +311,24 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               >
                 Proyecto Asignado
               </label>
-              <select
+              <input
                 id="agent-project"
+                type="text"
                 value={project}
+                maxLength={120}
                 onChange={(e) => setProject(e.target.value)}
-                className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-              >
-                {PROJECT_NAMES.map((proj) => (
-                  <option key={proj} value={proj}>
-                    {proj}
-                  </option>
-                ))}
-              </select>
+                placeholder="Opcional"
+                className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+              />
             </div>
 
             <div>
-              <label
-                htmlFor="agent-status"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
-              >
+              <span className="mb-1.5 block text-xs font-medium text-slate-300">
                 Zona Inicial en 3D
-              </label>
-              <select
-                id="agent-status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as AgentStatus)}
-                className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-              >
-                <option value="working">Trabajando (Zona A · Lab)</option>
-                <option value="waiting_sheldon">
-                  Esperando a Sheldon (Zona B)
-                </option>
-                <option value="idle">Descansando · 0 KB (Zona C)</option>
-              </select>
+              </span>
+              <div className="rounded-xl border border-slate-800 bg-[#070B12] px-3 py-2.5 text-xs text-slate-400">
+                Descansando · Zona C (todo agente nuevo empieza en reposo)
+              </div>
             </div>
           </div>
 
@@ -362,9 +343,10 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 active:translate-y-0 active:scale-95"
+              disabled={saving}
+              className="rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 active:translate-y-0 active:scale-95 disabled:opacity-60"
             >
-              Desplegar Agente
+              {saving ? 'Creando…' : 'Desplegar Agente'}
             </button>
           </div>
         </form>

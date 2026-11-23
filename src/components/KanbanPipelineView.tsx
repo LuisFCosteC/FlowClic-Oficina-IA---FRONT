@@ -13,20 +13,17 @@ import {
   Agent,
   KanbanTask,
   ModelTier,
+  NewTaskInput,
   TaskPriority,
   TaskStage,
 } from '../types/orbis';
-import {
-  MODEL_TIER_META,
-  PROJECT_NAMES,
-  TASK_STAGE_META,
-} from '../data/initialData';
+import { MODEL_TIER_META, TASK_STAGE_META } from '../data/initialData';
 
 interface KanbanPipelineViewProps {
   tasks: KanbanTask[];
   agents: Agent[];
   onMoveTaskStage: (taskId: string, newStage: TaskStage) => void;
-  onCreateTask: (task: KanbanTask) => void;
+  onCreateTask: (input: NewTaskInput) => void;
 }
 
 const STAGES: TaskStage[] = [
@@ -59,12 +56,17 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [project, setProject] = useState(PROJECT_NAMES[0]);
-  const [assigneeId, setAssigneeId] = useState(agents[1]?.id ?? agents[0]?.id ?? '');
+  const [project, setProject] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
   const [modelTier, setModelTier] = useState<ModelTier>('sonnet_pro');
-  const [priority, setPriority] = useState<TaskPriority>('alta');
-  const [stage, setStage] = useState<TaskStage>('in_dev');
+  const [priority, setPriority] = useState<TaskPriority>('media');
   const [formError, setFormError] = useState('');
+
+  // Los proyectos salen de los propios tickets (no hay lista de ejemplo).
+  const projectNames = useMemo(
+    () => Array.from(new Set(tasks.map((t) => t.project).filter((p) => p !== ''))).sort(),
+    [tasks]
+  );
 
   const agentMap = useMemo(() => {
     const map = new Map<string, Agent>();
@@ -95,26 +97,14 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
       setFormError('Escribe un título para la tarea.');
       return;
     }
-    const costByTier: Record<ModelTier, number> = {
-      opus_pro: 6.4,
-      sonnet_pro: 2.5,
-      haiku_flash: 0.45,
-    };
-    const newTask: KanbanTask = {
-      id: `task-${Date.now()}`,
+    onCreateTask({
       title: title.trim(),
-      description:
-        description.trim() ||
-        'Ejecución coordinada por Cerebro FlowClic con reporte automático a Sheldon.',
-      project,
-      assigneeId: assigneeId || agents[0].id,
+      description: description.trim(),
+      project: project.trim(),
+      assigneeId,
       modelTier,
-      stage,
       priority,
-      estimatedCostUsd: costByTier[modelTier],
-      updatedAt: 'Ahora mismo',
-    };
-    onCreateTask(newTask);
+    });
     setTitle('');
     setDescription('');
     setFormError('');
@@ -144,7 +134,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
             className="rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
           >
             <option value="all">Todos los proyectos</option>
-            {PROJECT_NAMES.map((p) => (
+            {projectNames.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
@@ -303,8 +293,13 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                             className="rounded-xl border border-slate-800/90 bg-[#10192B] p-3.5 shadow-sm transition-colors hover:border-slate-700"
                           >
                             <div className="text-[11px] text-slate-400">
-                              {task.project} ·{' '}
+                              {task.project ? `${task.project} · ` : ''}
                               <span className={prio.className}>{prio.label}</span>
+                              {task.returned && (
+                                <span className="ml-2 rounded-md border border-rose-500/50 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+                                  Devuelta
+                                </span>
+                              )}
                             </div>
                             <h3 className="mt-1.5 text-sm font-semibold leading-snug text-slate-100">
                               {task.title}
@@ -406,7 +401,9 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                               {task.title}
                             </div>
                             <div className="text-[11px] text-slate-500">
-                              {task.project} · {task.updatedAt}
+                              {task.project ? `${task.project} · ` : ''}
+                              {task.updatedAt}
+                              {task.returned ? ' · Devuelta' : ''}
                             </div>
                           </td>
                           <td className="px-4 py-3.5">
@@ -540,18 +537,21 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                   >
                     Proyecto
                   </label>
-                  <select
+                  <input
                     id="task-project"
+                    type="text"
+                    list="task-project-options"
                     value={project}
+                    maxLength={120}
                     onChange={(e) => setProject(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-                  >
-                    {PROJECT_NAMES.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
+                    placeholder="Opcional"
+                    className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+                  />
+                  <datalist id="task-project-options">
+                    {projectNames.map((p) => (
+                      <option key={p} value={p} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 <div>
@@ -567,6 +567,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                     onChange={(e) => setAssigneeId(e.target.value)}
                     className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
                   >
+                    <option value="">Sin asignar</option>
                     {agents.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name} — {a.title}
@@ -618,24 +619,12 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="task-stage"
-                    className="mb-1.5 block text-xs font-medium text-slate-300"
-                  >
+                  <span className="mb-1.5 block text-xs font-medium text-slate-300">
                     Etapa inicial
-                  </label>
-                  <select
-                    id="task-stage"
-                    value={stage}
-                    onChange={(e) => setStage(e.target.value as TaskStage)}
-                    className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-                  >
-                    {STAGES.map((st) => (
-                      <option key={st} value={st}>
-                        {TASK_STAGE_META[st].label}
-                      </option>
-                    ))}
-                  </select>
+                  </span>
+                  <div className="rounded-xl border border-slate-800 bg-[#070B12] px-3 py-2.5 text-xs text-slate-400">
+                    Backlog (siempre empieza pendiente)
+                  </div>
                 </div>
               </div>
 
