@@ -11,6 +11,9 @@ import type {
   ApiLimitsSettings,
   ApiAuditEntry,
   ApiAuditFilters,
+  ApiAdminUser,
+  ApiUserCreate,
+  ApiUserUpdate,
   ApiRule,
   ApiRuleCreate,
   ApiRuleUpdate,
@@ -124,6 +127,11 @@ export const api = {
     const q = params.toString();
     return request<ApiAuditEntry[]>('GET', `/api/admin/audit${q ? `?${q}` : ''}`);
   },
+  listUsers: () => request<ApiAdminUser[]>('GET', '/api/admin/users'),
+  createUser: (body: ApiUserCreate) =>
+    request<ApiAdminUser>('POST', '/api/admin/users', body),
+  updateUser: (id: string, body: ApiUserUpdate) =>
+    request<ApiAdminUser>('PATCH', `/api/admin/users/${encodeURIComponent(id)}`, body),
 
   createTicket: (body: ApiTicketCreate) => request<ApiTicket>('POST', '/api/tickets', body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>

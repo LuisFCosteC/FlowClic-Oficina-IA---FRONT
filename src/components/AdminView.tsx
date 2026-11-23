@@ -24,6 +24,7 @@ import { ConnectionsPanel } from './ConnectionsPanel';
 import { LimitsPanel } from './LimitsPanel';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { RulesPanel } from './RulesPanel';
+import { UsersPanel } from './UsersPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
 
 type AdminTab =
@@ -44,7 +45,7 @@ const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'project', label: 'Proyecto', enabled: true },
   { id: 'rules', label: 'Reglas', enabled: true },
   { id: 'limits', label: 'Límites', enabled: true },
-  { id: 'users', label: 'Usuarios', enabled: false },
+  { id: 'users', label: 'Usuarios', enabled: true },
   { id: 'audit', label: 'Auditoría', enabled: true },
   { id: 'db', label: 'Conexión BD', enabled: true },
 ];
@@ -209,6 +210,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         {tab === 'rules' && <RulesPanel />}
 
         {tab === 'limits' && <LimitsPanel />}
+
+        {tab === 'users' && <UsersPanel />}
 
         {tab === 'audit' && <AuditPanel />}
 

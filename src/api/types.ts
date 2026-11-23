@@ -97,6 +97,33 @@ export interface ApiAuditFilters {
   to?: string;
 }
 
+export type ApiUserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER';
+
+export interface ApiAdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: ApiUserRole;
+  mfaEnabled: boolean;
+  lastLoginAt: string | null;
+  disabledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiUserCreate {
+  email: string;
+  displayName: string;
+  role: ApiUserRole;
+  password: string;
+}
+
+export interface ApiUserUpdate {
+  displayName?: string;
+  role?: ApiUserRole;
+  disabled?: boolean;
+}
+
 export type ApiRuleSeverity = 'MUST' | 'SHOULD';
 
 export interface ApiRule {
