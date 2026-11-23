@@ -51,6 +51,7 @@ export interface Agent {
   /** Apariencia completa (ropa, piel, cabello...). */
   look?: AvatarLook;
   character?: string;
+  reportsTo?: string;
   roleType?: RoleType;
   functions?: string[];
   rules?: string[];

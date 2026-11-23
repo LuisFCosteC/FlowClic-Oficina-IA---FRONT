@@ -19,28 +19,24 @@ import {
   X,
 } from 'lucide-react';
 import {
+  ACTION_DEFINITIONS,
   AgentCreatePayload,
-  AgentTemplateData,
+  generateSystemPromptPreview,
+  GLOBAL_RESTRICTIONS,
   HairStyle,
   RoleType,
   TicketStatus,
-  WorkspaceLevel,
-} from '../types/agentProfile';
-import {
-  ACTION_DEFINITIONS,
-  AGENT_TEMPLATES,
-  generateSystemPromptPreview,
-  GLOBAL_RESTRICTIONS,
-  MODELS_CATALOG,
   TRANSITION_LABELS,
   VALID_TRANSITIONS,
   WORKSPACE_LEVELS,
-} from '../data/agentTemplates';
+  WorkspaceLevel,
+} from '../types/agentProfile';
 import { Agent } from '../types/orbis';
 import { AvatarEditor } from './AvatarEditor';
 import type { AvatarLook } from '../types/agentProfile';
 import { api } from '../api/client';
 import type { ApiModelInfo, ApiWorkspace } from '../api/types';
+import { agentFromApi } from '../api/mappers';
 
 interface CreateAgentProfileModalProps {
   open: boolean;
@@ -52,26 +48,9 @@ interface CreateAgentProfileModalProps {
   ) => Promise<void> | void;
   agentToEdit?: Agent | null;
   apiErrors?: Array<{ path: string; message: string }>;
+  existingAgents?: Agent[];
+  onNavigateToWorkspaces?: () => void;
 }
-
-const AVATAR_COLORS = [
-  '#06B6D4',
-  '#38BDF8',
-  '#10B981',
-  '#F59E0B',
-  '#EC4899',
-  '#6366F1',
-  '#8B5CF6',
-  '#F97316',
-];
-
-const HAIR_STYLES: Array<{ id: HairStyle; label: string }> = [
-  { id: 'short', label: 'Corto' },
-  { id: 'parted', label: 'Raya al lado' },
-  { id: 'long', label: 'Largo' },
-  { id: 'curly', label: 'Rizado' },
-  { id: 'bun', label: 'Moño' },
-];
 
 type ModalTab = 'profile' | 'behavior' | 'permissions' | 'model' | 'preview';
 
@@ -81,67 +60,44 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
   onSubmit,
   apiErrors = [],
   agentToEdit = null,
+  existingAgents,
+  onNavigateToWorkspaces,
 }) => {
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('penny');
   const [activeTab, setActiveTab] = useState<ModalTab>('profile');
 
   // Basic Profile Info
-  const [name, setName] = useState('Penny');
-  const [character, setCharacter] = useState('Penny');
-  const [role, setRole] = useState('Frontend web y móvil');
-  const [roleType, setRoleType] = useState<RoleType>('DEV_FRONTEND');
-  const [avatarColor, setAvatarColor] = useState('#EC4899');
-  const [hairStyle, setHairStyle] = useState<HairStyle>('long');
+  const [name, setName] = useState('');
+  const [character, setCharacter] = useState('');
+  const [role, setRole] = useState('');
+  const [roleType, setRoleType] = useState<RoleType>('CUSTOM');
+  const [reportsTo, setReportsTo] = useState('');
+  const [avatarColor, setAvatarColor] = useState('#06B6D4');
+  const [hairStyle, setHairStyle] = useState<HairStyle>('short');
   const [glasses, setGlasses] = useState(false);
   const [look, setLook] = useState<AvatarLook>({});
 
   // Behavior Lists
-  const [functions, setFunctions] = useState<string[]>(
-    AGENT_TEMPLATES.find((t) => t.id === 'penny')?.functions ?? []
-  );
-  const [rules, setRules] = useState<string[]>(
-    AGENT_TEMPLATES.find((t) => t.id === 'penny')?.rules ?? []
-  );
-  const [restrictions, setRestrictions] = useState<string[]>(
-    AGENT_TEMPLATES.find((t) => t.id === 'penny')?.restrictions ?? []
-  );
+  const [functions, setFunctions] = useState<string[]>([]);
+  const [rules, setRules] = useState<string[]>([]);
+  const [restrictions, setRestrictions] = useState<string[]>([]);
 
   // Inline List Input Temp States
   const [newFunctionInput, setNewFunctionInput] = useState('');
   const [newRuleInput, setNewRuleInput] = useState('');
   const [newRestrictionInput, setNewRestrictionInput] = useState('');
 
-  // Permissions
-  const [workspaces, setWorkspaces] = useState<Record<string, WorkspaceLevel>>({
-    api: 'none',
-    front: 'write',
-    docs: 'read',
-  });
-  const [actions, setActions] = useState<string[]>([
-    'repo.read',
-    'cmd.install_approved',
-    'cmd.dev',
-    'cmd.build',
-    'cmd.test',
-    'cmd.lint',
-    'git.commit_dev',
-    'git.push_dev',
-  ]);
+  // Permissions (workspaces start completely empty)
+  const [workspaces, setWorkspaces] = useState<Record<string, WorkspaceLevel>>({});
+  const [actions, setActions] = useState<string[]>([]);
   const [ticketTransitions, setTicketTransitions] = useState<
     Array<[TicketStatus, TicketStatus]>
-  >([
-    ['PENDING', 'IN_PROGRESS'],
-    ['IN_PROGRESS', 'IN_QA'],
-    ['RETURNED', 'IN_PROGRESS'],
-  ]);
+  >([]);
   const [onlyAssignedTickets, setOnlyAssignedTickets] = useState(true);
 
   // Model & Limits
-  const [primaryModel, setPrimaryModel] = useState('gemini-pro');
-  const [fallbackModel, setFallbackModel] = useState<string>('gemini-flash');
-  const [fallbackCondition, setFallbackCondition] = useState(
-    'Para cambios pequeños (textos, estilos puntuales).'
-  );
+  const [primaryModel, setPrimaryModel] = useState('');
+  const [fallbackModel, setFallbackModel] = useState<string>('');
+  const [fallbackCondition, setFallbackCondition] = useState('');
   const [maxTokensPerTicket, setMaxTokensPerTicket] = useState(150000);
   const [maxUsdPerDay, setMaxUsdPerDay] = useState(8);
   const [maxRetries, setMaxRetries] = useState(3);
@@ -150,9 +106,10 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Dynamic Models and Workspaces from API
+  // Dynamic Models, Workspaces and Agents from API
   const [modelsList, setModelsList] = useState<ApiModelInfo[]>([]);
   const [workspacesList, setWorkspacesList] = useState<ApiWorkspace[]>([]);
+  const [internalAgents, setInternalAgents] = useState<Agent[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -169,10 +126,26 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       },
       () => {}
     );
+    if (!existingAgents) {
+      void api.listAgents().then(
+        (res) => {
+          if (!cancelled && Array.isArray(res)) setInternalAgents(res.map(agentFromApi));
+        },
+        () => {}
+      );
+    }
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, existingAgents]);
+
+  const allAvailableAgents = useMemo(() => {
+    const list = existingAgents || internalAgents;
+    if (agentToEdit) {
+      return list.filter((a) => a.id !== agentToEdit.id);
+    }
+    return list;
+  }, [existingAgents, internalAgents, agentToEdit]);
 
   // Map API errors to field paths
   const fieldErrors = useMemo(() => {
@@ -183,48 +156,14 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
     return map;
   }, [apiErrors]);
 
-  const loadTemplate = (tpl: AgentTemplateData) => {
-    setSelectedTemplateId(tpl.id);
-    setName(tpl.name);
-    setCharacter(tpl.character);
-    setRole(tpl.role);
-    setRoleType(tpl.roleType);
-    setAvatarColor(tpl.avatar.color);
-    setHairStyle(tpl.avatar.hairStyle ?? 'short');
-    setGlasses(Boolean(tpl.avatar.glasses));
-    {
-      const { color: _c, glasses: _g, hairStyle: _h, ...tplLook } = tpl.avatar;
-      setLook(tplLook);
-    }
-
-    setFunctions([...tpl.functions]);
-    setRules([...tpl.rules]);
-    setRestrictions([...tpl.restrictions]);
-
-    setWorkspaces({ ...tpl.permissions.workspaces });
-    setActions([...tpl.permissions.actions]);
-    setTicketTransitions([...tpl.permissions.ticketTransitions]);
-    setOnlyAssignedTickets(tpl.permissions.onlyAssignedTickets);
-
-    setPrimaryModel(tpl.model.primary);
-    setFallbackModel(tpl.model.fallback ?? '');
-    setFallbackCondition(tpl.model.fallbackCondition ?? '');
-
-    setMaxTokensPerTicket(tpl.limits.maxTokensPerTicket);
-    setMaxUsdPerDay(tpl.limits.maxUsdPerDay);
-    setMaxRetries(tpl.limits.maxRetries);
-
-    setLocalError(null);
-  };
-
   useEffect(() => {
     if (!open) return;
     if (agentToEdit) {
-      setSelectedTemplateId('custom');
       setName(agentToEdit.name);
       setCharacter(agentToEdit.character ?? agentToEdit.name);
       setRole(agentToEdit.title);
       setRoleType(agentToEdit.roleType ?? 'CUSTOM');
+      setReportsTo(agentToEdit.reportsTo ?? '');
       setAvatarColor(agentToEdit.color);
       setHairStyle(agentToEdit.hairStyle ?? 'short');
       setGlasses(Boolean(agentToEdit.glasses));
@@ -237,12 +176,12 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       setWorkspaces(
         agentToEdit.permissions?.workspaces
           ? { ...agentToEdit.permissions.workspaces }
-          : { api: 'none', front: 'none', docs: 'read' }
+          : {}
       );
       setActions(
         agentToEdit.permissions?.actions
           ? [...agentToEdit.permissions.actions]
-          : ['repo.read']
+          : []
       );
       setTicketTransitions(
         agentToEdit.permissions?.ticketTransitions
@@ -251,7 +190,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       );
       setOnlyAssignedTickets(agentToEdit.permissions?.onlyAssignedTickets ?? true);
 
-      setPrimaryModel(agentToEdit.modelConfig?.primary ?? 'claude-sonnet-5-5');
+      setPrimaryModel(agentToEdit.modelConfig?.primary ?? '');
       setFallbackModel(agentToEdit.modelConfig?.fallback ?? '');
       setFallbackCondition(agentToEdit.modelConfig?.fallbackCondition ?? '');
 
@@ -260,41 +199,56 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       setMaxRetries(agentToEdit.limits?.maxRetries ?? 3);
       setLocalError(null);
     } else {
-      const defaultTpl =
-        AGENT_TEMPLATES.find((t) => t.id === 'penny') ?? AGENT_TEMPLATES[0];
-      if (defaultTpl) loadTemplate(defaultTpl);
+      // Formulario empieza VACÍO
+      setName('');
+      setCharacter('');
+      setRole('');
+      setRoleType('CUSTOM');
+      setReportsTo('');
+      setAvatarColor('#06B6D4');
+      setHairStyle('short');
+      setGlasses(false);
+      setLook({});
+      setFunctions([]);
+      setRules([]);
+      setRestrictions([]);
+      setWorkspaces({});
+      setActions([]);
+      setTicketTransitions([]);
+      setOnlyAssignedTickets(true);
+      setPrimaryModel('');
+      setFallbackModel('');
+      setFallbackCondition('');
+      setMaxTokensPerTicket(150000);
+      setMaxUsdPerDay(8);
+      setMaxRetries(3);
+      setLocalError(null);
     }
   }, [open, agentToEdit]);
 
+  // Espacios de trabajo salen SOLO de GET /api/admin/workspaces
   const workspaceKeys = useMemo(() => {
-    const set = new Set<string>(['api', 'front', 'docs']);
+    const set = new Set<string>();
     workspacesList.forEach((w) => set.add(w.id));
-    Object.keys(workspaces).forEach((k) => set.add(k));
+    if (agentToEdit?.permissions?.workspaces) {
+      Object.keys(agentToEdit.permissions.workspaces).forEach((k) => set.add(k));
+    }
     return Array.from(set);
-  }, [workspacesList, workspaces]);
+  }, [workspacesList, agentToEdit]);
 
+  // Modelos agrupados en Claude y Gemini
   const groupedModels = useMemo(() => {
-    const catalog: ApiModelInfo[] =
-      modelsList.length > 0
-        ? modelsList
-        : MODELS_CATALOG.map((m) => ({
-            id: m.id,
-            label: m.label,
-            provider: m.provider === 'anthropic' ? 'Anthropic' : 'Google',
-            hasConnection: true,
-          }));
-
-    const claude = catalog.filter(
+    const claude = modelsList.filter(
       (m) =>
         m.provider.toLowerCase().includes('anthropic') ||
         m.id.toLowerCase().includes('claude')
     );
-    const gemini = catalog.filter(
+    const gemini = modelsList.filter(
       (m) =>
         m.provider.toLowerCase().includes('google') ||
         m.id.toLowerCase().includes('gemini')
     );
-    const others = catalog.filter(
+    const others = modelsList.filter(
       (m) => !claude.includes(m) && !gemini.includes(m)
     );
 
@@ -343,11 +297,12 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       name,
       role,
       roleType,
+      reportsTo: reportsTo.trim() || undefined,
       functions,
       rules,
       restrictions,
     });
-  }, [name, role, roleType, functions, rules, restrictions]);
+  }, [name, role, roleType, reportsTo, functions, rules, restrictions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -365,11 +320,18 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       return;
     }
 
+    if (!primaryModel.trim()) {
+      setLocalError('Debes seleccionar un modelo principal.');
+      setActiveTab('model');
+      return;
+    }
+
     const payload: AgentCreatePayload = {
       name: name.trim(),
       role: role.trim(),
       roleType,
       character: character.trim() || undefined,
+      reportsTo: reportsTo.trim() || undefined,
       avatar: {
         color: avatarColor,
         hairStyle,
@@ -407,6 +369,9 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       if (character.trim() !== (agentToEdit.character ?? '')) {
         changedFields.character = character.trim() || undefined;
       }
+      if (reportsTo.trim() !== (agentToEdit.reportsTo ?? '')) {
+        changedFields.reportsTo = reportsTo.trim() || undefined;
+      }
 
       const avatarChanged =
         avatarColor !== agentToEdit.color ||
@@ -443,7 +408,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
         fallback: fallbackModel.trim() || null,
         fallbackCondition: fallbackCondition.trim() || null,
       };
-      const origModel = agentToEdit.modelConfig ?? { primary: 'claude-sonnet-5-5' };
+      const origModel = agentToEdit.modelConfig ?? { primary: '' };
       if (
         currentModel.primary !== origModel.primary ||
         (currentModel.fallback || null) !== (origModel.fallback || null) ||
@@ -496,7 +461,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
 
       {/* Modal Dialog Card */}
       <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-700/80 bg-[#0A101C] text-slate-100 shadow-2xl shadow-cyan-950/40">
-        {/* Header with Title and Template Selector */}
+        {/* Header with Title (sin selector de plantillas) */}
         <div className="border-b border-slate-800/80 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -518,8 +483,8 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                 </h2>
                 <p className="text-xs text-slate-400">
                   {agentToEdit
-                    ? 'Modifica funciones, reglas, restricciones, modelo y permisos del agente (PLAN §19)'
-                    : 'Configura perfiles, permisos duros, modelo y reglas del agente (PLAN §19)'}
+                    ? 'Modifica funciones, reglas, restricciones, modelo y permisos del agente'
+                    : 'Configura perfiles, permisos duros, modelo y reglas del agente a mano'}
                 </p>
               </div>
             </div>
@@ -532,34 +497,6 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
-
-          {/* Template Bar */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-slate-400">
-              {agentToEdit ? 'Reemplazar con plantilla:' : 'Plantilla:'}
-            </span>
-            {AGENT_TEMPLATES.map((tpl) => {
-              const active = selectedTemplateId === tpl.id;
-              return (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  onClick={() => loadTemplate(tpl)}
-                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
-                    active
-                      ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-400/50 shadow-sm shadow-cyan-500/20'
-                      : 'border-slate-800 bg-slate-900/80 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
-                  }`}
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: tpl.avatar.color }}
-                  />
-                  <span>{tpl.label}</span>
-                </button>
-              );
-            })}
           </div>
         </div>
 
@@ -679,19 +616,6 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
 
                   <div>
                     <label className="block text-xs font-medium text-slate-300">
-                      Personaje / Referencia
-                    </label>
-                    <input
-                      type="text"
-                      value={character}
-                      onChange={(e) => setCharacter(e.target.value)}
-                      placeholder="Ej: Penny"
-                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300">
                       Rol Funcional <span className="text-cyan-400">*</span>
                     </label>
                     <input
@@ -712,6 +636,26 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                     )}
                   </div>
 
+                  {/* "Reporta a": selector con los agentes existentes, más "CEO" */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300">
+                      Reporta a
+                    </label>
+                    <select
+                      value={reportsTo}
+                      onChange={(e) => setReportsTo(e.target.value)}
+                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
+                    >
+                      <option value="">Seleccionar a quién reporta...</option>
+                      <option value="CEO">CEO</option>
+                      {allAvailableAgents.map((ag) => (
+                        <option key={ag.id} value={ag.name}>
+                          {ag.name} ({ag.title || ag.roleType || 'Agente'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-medium text-slate-300">
                       Tipo de Rol (`role_type`)
@@ -721,16 +665,29 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                       onChange={(e) => setRoleType(e.target.value as RoleType)}
                       className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
                     >
+                      <option value="CUSTOM">CUSTOM (Personalizado)</option>
                       <option value="CTO">CTO (Orquestador principal)</option>
                       <option value="DEV_BACKEND">DEV_BACKEND (Backend & Core)</option>
                       <option value="DEV_FRONTEND">DEV_FRONTEND (Frontend & UI)</option>
                       <option value="QA">QA (Calidad & Seguridad)</option>
-                      <option value="CUSTOM">CUSTOM (Personalizado)</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300">
+                      Personaje / Referencia
+                    </label>
+                    <input
+                      type="text"
+                      value={character}
+                      onChange={(e) => setCharacter(e.target.value)}
+                      placeholder="Ej: Penny"
+                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+                    />
                   </div>
                 </div>
 
-                {/* Editor completo del personaje: género, piel, cabello, ropa, colores y más */}
+                {/* Editor completo del personaje: género, piel, cabello, ropa, colores y más (BLOQUEADO) */}
                 <AvatarEditor
                   name={name}
                   color={avatarColor}
@@ -876,7 +833,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                         Restricciones Propias del Agente
                       </h4>
                       <p className="text-[11px] text-slate-400">
-                        Límites de alcance propios del rol (ej: Penny no toca API).
+                        Límites de alcance propios del rol (ej: no toca base de datos).
                       </p>
                     </div>
                     <span className="font-mono text-xs text-amber-400">
@@ -930,18 +887,18 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                   </div>
                 </div>
 
-                {/* 4. Global Restrictions (LOCKED) */}
+                {/* 4. Global Restrictions (6 inviolables, bloqueadas con candado) */}
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
                   <div className="flex items-center gap-2 text-amber-300">
                     <Lock className="h-4 w-4" />
                     <h4 className="text-xs font-semibold">
-                      Restricciones Globales Inviolables (Bloqueadas con Candado)
+                      Restricciones Globales Inviolables ({GLOBAL_RESTRICTIONS.length} bloqueadas con candado)
                     </h4>
                   </div>
                   <p className="text-[11px] text-amber-200/80">
-                    Estas 5 restricciones son aplicadas rigurosamente con código por la API
+                    Estas restricciones son aplicadas rigurosamente con código por la API
                     y se inyectan automáticamente en el prompt del servidor. No pueden ser
-                    modificadas ni removidas por ningún usuario ni plantilla.
+                    modificadas ni removidas por ningún usuario.
                   </p>
 
                   <div className="space-y-2">
@@ -964,7 +921,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
             {/* TAB 3: Permissions (Workspaces, Actions, Transitions) */}
             {activeTab === 'permissions' && (
               <div className="space-y-6">
-                {/* Workspaces */}
+                {/* Workspaces: salen SOLO de GET /api/admin/workspaces */}
                 <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -972,53 +929,82 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                         Espacios de Trabajo (`permissions.workspaces`)
                       </h4>
                       <p className="text-[11px] text-slate-400">
-                        Nivel de acceso en las carpetas lógicas del proyecto (PLAN §19.3).
+                        Nivel de acceso en las carpetas de trabajo configuradas en el servidor.
                       </p>
                     </div>
                     <HardDrive className="h-4 w-4 text-cyan-400" />
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {workspaceKeys.map((wsKey) => {
-                      const wsInfo = workspacesList.find((w) => w.id === wsKey);
-                      return (
-                        <div
-                          key={wsKey}
-                          className="rounded-xl border border-slate-800 bg-[#0A101C] p-3"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-xs font-semibold text-cyan-300 uppercase">
-                              {wsKey}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {workspaces[wsKey] ?? 'none'}
-                            </span>
-                          </div>
-                          {wsInfo?.name && wsInfo.name !== wsKey && (
-                            <div className="mt-0.5 truncate text-[10px] text-slate-400">
-                              {wsInfo.name}
-                            </div>
-                          )}
-                          <select
-                            value={workspaces[wsKey] ?? 'none'}
-                            onChange={(e) =>
-                              setWorkspaces((prev) => ({
-                                ...prev,
-                                [wsKey]: e.target.value as WorkspaceLevel,
-                              }))
-                            }
-                            className="mt-2 w-full rounded-lg border border-slate-800 bg-[#070B14] px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                          >
-                            {WORKSPACE_LEVELS.map((lvl) => (
-                              <option key={lvl.value} value={lvl.value}>
-                                {lvl.label}
-                              </option>
-                            ))}
-                          </select>
+                  {workspacesList.length === 0 ? (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs text-amber-200">
+                          <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                          <span>
+                            No hay espacios de trabajo. Créalos en Administración → Espacios de trabajo
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        {onNavigateToWorkspaces && (
+                          <button
+                            type="button"
+                            onClick={onNavigateToWorkspaces}
+                            className="rounded-lg border border-amber-400/40 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/30 transition-all shrink-0"
+                          >
+                            Ir a Espacios de trabajo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {workspaceKeys.map((wsKey) => {
+                        const wsInfo = workspacesList.find((w) => w.id === wsKey);
+                        return (
+                          <div
+                            key={wsKey}
+                            className="rounded-xl border border-slate-800 bg-[#0A101C] p-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-xs font-semibold text-cyan-300 uppercase">
+                                {wsKey}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {workspaces[wsKey] ?? 'none'}
+                              </span>
+                            </div>
+                            {wsInfo?.name && wsInfo.name !== wsKey && (
+                              <div className="mt-0.5 truncate text-[10px] text-slate-400">
+                                {wsInfo.name}
+                              </div>
+                            )}
+                            <select
+                              value={workspaces[wsKey] ?? 'none'}
+                              onChange={(e) =>
+                                setWorkspaces((prev) => ({
+                                  ...prev,
+                                  [wsKey]: e.target.value as WorkspaceLevel,
+                                }))
+                              }
+                              className="mt-2 w-full rounded-lg border border-slate-800 bg-[#070B14] px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
+                            >
+                              {WORKSPACE_LEVELS.map((lvl) => (
+                                <option key={lvl.value} value={lvl.value}>
+                                  {lvl.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* El error 400 de permissions.workspaces se muestra bajo ese campo */}
+                  {fieldErrors.has('permissions.workspaces') && (
+                    <p className="mt-2 text-xs text-rose-400">
+                      {fieldErrors.get('permissions.workspaces')}
+                    </p>
+                  )}
                 </div>
 
                 {/* Actions Checklist */}
@@ -1146,7 +1132,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
               </div>
             )}
 
-            {/* TAB 4: Model & Limits */}
+            {/* TAB 4: Model & Limits (agrupados en Claude y Gemini con sin conexión) */}
             {activeTab === 'model' && (
               <div className="space-y-6">
                 <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-4">
@@ -1162,10 +1148,15 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                       <select
                         value={primaryModel}
                         onChange={(e) => setPrimaryModel(e.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
+                        className={`mt-1.5 w-full rounded-xl border bg-[#070B14] px-3 py-2 text-xs text-slate-200 focus:outline-none ${
+                          fieldErrors.has('model.primary')
+                            ? 'border-rose-500 focus:border-rose-400'
+                            : 'border-slate-800 focus:border-cyan-400'
+                        }`}
                       >
+                        <option value="">Selecciona un modelo...</option>
                         {groupedModels.claude.length > 0 && (
-                          <optgroup label="Modelos Claude">
+                          <optgroup label="Claude">
                             {groupedModels.claude.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label} {!m.hasConnection ? '— sin conexión' : ''}
@@ -1174,7 +1165,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                           </optgroup>
                         )}
                         {groupedModels.gemini.length > 0 && (
-                          <optgroup label="Modelos Gemini">
+                          <optgroup label="Gemini">
                             {groupedModels.gemini.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label} {!m.hasConnection ? '— sin conexión' : ''}
@@ -1192,6 +1183,11 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                           </optgroup>
                         )}
                       </select>
+                      {fieldErrors.has('model.primary') && (
+                        <p className="mt-1 text-[11px] text-rose-400">
+                          {fieldErrors.get('model.primary')}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1205,7 +1201,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                       >
                         <option value="">Sin respaldo</option>
                         {groupedModels.claude.length > 0 && (
-                          <optgroup label="Modelos Claude">
+                          <optgroup label="Claude">
                             {groupedModels.claude.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label} {!m.hasConnection ? '— sin conexión' : ''}
@@ -1214,7 +1210,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                           </optgroup>
                         )}
                         {groupedModels.gemini.length > 0 && (
-                          <optgroup label="Modelos Gemini">
+                          <optgroup label="Gemini">
                             {groupedModels.gemini.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label} {!m.hasConnection ? '— sin conexión' : ''}
@@ -1331,11 +1327,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between border-t border-slate-800/80 bg-[#070B14] px-6 py-4">
-            <div className="text-[11px] text-slate-500">
-              Plantilla activa: <strong className="text-slate-300">{selectedTemplateId}</strong>
-            </div>
-
+          <div className="flex items-center justify-end border-t border-slate-800/80 bg-[#070B14] px-6 py-4">
             <div className="flex items-center gap-3">
               <button
                 type="button"

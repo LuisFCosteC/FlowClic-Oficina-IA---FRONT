@@ -27,7 +27,7 @@ import { RulesPanel } from './RulesPanel';
 import { UsersPanel } from './UsersPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
 
-type AdminTab =
+export type AdminTab =
   | 'workspaces'
   | 'connections'
   | 'agents'
@@ -52,18 +52,31 @@ const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
 
 const DISABLED_TEXT = 'Disponible tras el login (S06)';
 
-interface AdminViewProps {
+export interface AdminViewProps {
   agents: Agent[];
   onOpenCreateAgent: () => void;
   onOpenEditAgent: (agent: Agent) => void;
+  initialTab?: AdminTab;
+  onTabChange?: (tab: AdminTab) => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
   agents,
   onOpenCreateAgent,
   onOpenEditAgent,
+  initialTab,
+  onTabChange,
 }) => {
-  const [tab, setTab] = useState<AdminTab>('agents');
+  const [tab, setTab] = useState<AdminTab>(initialTab || 'agents');
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
+
+  const selectTab = (t: AdminTab) => {
+    setTab(t);
+    onTabChange?.(t);
+  };
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ADM03: Agentes archivados y gestión
@@ -150,7 +163,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               aria-disabled={!t.enabled}
               disabled={!t.enabled}
               title={t.enabled ? undefined : DISABLED_TEXT}
-              onClick={() => setTab(t.id)}
+              onClick={() => selectTab(t.id)}
               className={`rounded-xl border px-3.5 py-2 text-xs font-medium transition-all ${
                 active
                   ? 'border-cyan-500/45 bg-cyan-500/12 text-cyan-200'

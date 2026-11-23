@@ -35,7 +35,7 @@ import { CerebroOrbisView } from './components/CerebroOrbisView';
 import { KanbanPipelineView } from './components/KanbanPipelineView';
 import { RoadmapCalendarView } from './components/RoadmapCalendarView';
 import { CreateAgentProfileModal } from './components/CreateAgentProfileModal';
-import { AdminView } from './components/AdminView';
+import { AdminView, AdminTab } from './components/AdminView';
 import { EmptyState } from './components/EmptyState';
 
 const MODULE_HEADERS: Record<
@@ -106,6 +106,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [createAgentOpen, setCreateAgentOpen] = useState<boolean>(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [adminTab, setAdminTab] = useState<AdminTab>('agents');
 
   // Datos del servidor (BD): agentes, tickets y aprobaciones.
   const [store, dispatch] = useOfficeStore();
@@ -562,6 +563,8 @@ export default function App() {
                     agents={agents}
                     onOpenCreateAgent={openCreateAgent}
                     onOpenEditAgent={openEditAgent}
+                    initialTab={adminTab}
+                    onTabChange={setAdminTab}
                   />
                 </motion.div>
               )}
@@ -583,7 +586,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal: Crear / Editar Agente con perfiles, modelo y permisos (G07) */}
+      {/* Modal: Crear / Editar Agente con perfiles, modelo y permisos (AG-MANUAL) */}
       <CreateAgentProfileModal
         open={createAgentOpen}
         onClose={() => {
@@ -592,6 +595,13 @@ export default function App() {
         }}
         onSubmit={handleSaveAgentProfile}
         agentToEdit={editingAgent}
+        existingAgents={agents}
+        onNavigateToWorkspaces={() => {
+          setCreateAgentOpen(false);
+          setEditingAgent(null);
+          setActiveModule('admin');
+          setAdminTab('workspaces');
+        }}
       />
     </div>
   );
