@@ -79,6 +79,24 @@ export interface ApiLimitsSettings {
   requireApprovalForDone: boolean;
 }
 
+export interface ApiAuditEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ApiAuditFilters {
+  limit?: number;
+  action?: string;
+  from?: string;
+  to?: string;
+}
+
 export type ApiRuleSeverity = 'MUST' | 'SHOULD';
 
 export interface ApiRule {

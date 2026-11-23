@@ -9,6 +9,8 @@ import type {
   ApiModelInfo,
   ApiProjectSettings,
   ApiLimitsSettings,
+  ApiAuditEntry,
+  ApiAuditFilters,
   ApiRule,
   ApiRuleCreate,
   ApiRuleUpdate,
@@ -113,6 +115,15 @@ export const api = {
     request<void>('DELETE', `/api/admin/workspaces/${encodeURIComponent(id)}`),
   checkWorkspace: (id: string) =>
     request<ApiWorkspaceCheck>('POST', `/api/admin/workspaces/${encodeURIComponent(id)}/check`),
+  listAudit: (filters?: ApiAuditFilters) => {
+    const params = new URLSearchParams();
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.action) params.set('action', filters.action);
+    if (filters?.from) params.set('from', filters.from);
+    if (filters?.to) params.set('to', filters.to);
+    const q = params.toString();
+    return request<ApiAuditEntry[]>('GET', `/api/admin/audit${q ? `?${q}` : ''}`);
+  },
 
   createTicket: (body: ApiTicketCreate) => request<ApiTicket>('POST', '/api/tickets', body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>

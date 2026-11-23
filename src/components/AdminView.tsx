@@ -19,6 +19,7 @@ import type { ApiSetupStatus } from '../api/types';
 import { Agent } from '../types/orbis';
 import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
+import { AuditPanel } from './AuditPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { LimitsPanel } from './LimitsPanel';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
@@ -44,7 +45,7 @@ const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'rules', label: 'Reglas', enabled: true },
   { id: 'limits', label: 'Límites', enabled: true },
   { id: 'users', label: 'Usuarios', enabled: false },
-  { id: 'audit', label: 'Auditoría', enabled: false },
+  { id: 'audit', label: 'Auditoría', enabled: true },
   { id: 'db', label: 'Conexión BD', enabled: true },
 ];
 
@@ -208,6 +209,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         {tab === 'rules' && <RulesPanel />}
 
         {tab === 'limits' && <LimitsPanel />}
+
+        {tab === 'audit' && <AuditPanel />}
 
         {tab === 'db' && (
           <section className="max-w-3xl rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
