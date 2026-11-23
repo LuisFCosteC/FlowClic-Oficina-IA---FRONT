@@ -2,17 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import {
-  ChevronDown,
-  ChevronUp,
-  Cpu,
-  Eye,
-  Play,
-  RotateCcw,
-  Square,
-  Users,
-} from 'lucide-react';
 import { Agent, AgentStatus } from '../types/orbis';
+import { OfficeControlPanel, CameraPresetKey } from './OfficeControlPanel';
 import { MODEL_TIER_META, STATUS_META, isResting } from '../data/initialData';
 import {
   AvatarRig,
@@ -34,9 +25,10 @@ import { createContactShadowTexture } from './three/proceduralTextures';
 interface Colmena3DViewProps {
   agents: Agent[];
   onChangeAgentStatus: (agentId: string, status: AgentStatus) => void;
+  onCreateAgent?: () => void;
 }
 
-type CameraPresetKey = 'overview' | 'laboratorio' | 'oficina_sheldon' | 'zona_descanso';
+// CameraPresetKey imported from OfficeControlPanel
 
 const CAMERA_PRESETS: Record<
   CameraPresetKey,
@@ -166,17 +158,16 @@ function assignZoneSlots(agents: Agent[]): Map<string, ZoneSlot> {
 export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
   agents,
   onChangeAgentStatus,
+  onCreateAgent,
 }) => {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const labelRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const zoneLabelRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
-  const [dockExpanded, setDockExpanded] = useState<boolean>(true);
   const [activePreset, setActivePreset] = useState<CameraPresetKey>('overview');
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState<boolean>(false);
   const [webglLost, setWebglLost] = useState<boolean>(false);
-  const [simulatingCycle, setSimulatingCycle] = useState<boolean>(false);
-  const [cycleMessage, setCycleMessage] = useState<string>('');
 
   // Mutable refs for Three.js loop to stay decoupled from React renders
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -215,7 +206,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.key === 'h' || e.key === 'H') {
-        setDockExpanded((prev) => !prev);
+        setIsRightPanelCollapsed((prev) => !prev);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -628,12 +619,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     });
   }, [agents]);
 
-  // Cleanup automatic simulation timers on unmount
-  useEffect(() => {
-    return () => {
-      cycleTimersRef.current.forEach((id) => window.clearTimeout(id));
-    };
-  }, []);
+
 
   const flyToPreset = (preset: CameraPresetKey) => {
     setActivePreset(preset);
@@ -645,47 +631,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     };
   };
 
-  const stopCycleSimulation = () => {
-    cycleTimersRef.current.forEach((id) => window.clearTimeout(id));
-    cycleTimersRef.current = [];
-    setSimulatingCycle(false);
-    setCycleMessage('');
-  };
 
-  const runFullCycleSimulation = () => {
-    const targetAgent = agents.find((a) => a.id === selectedAgentId) ?? agents[0];
-    if (!targetAgent) return;
-
-    stopCycleSimulation();
-    setSimulatingCycle(true);
-    flyToPreset('overview');
-
-    // Step 1: Start in Zona de descanso -> Walk to Laboratorio -> Walk to Oficina de Sheldon -> Back to Zona de descanso
-    setCycleMessage(`${targetAgent.name}: Saliendo de Zona de descanso → Laboratorio`);
-    onChangeAgentStatus(targetAgent.id, 'idle');
-
-    const t1 = window.setTimeout(() => {
-      setCycleMessage(`${targetAgent.name}: Caminando a Laboratorio · Ejecutando código`);
-      onChangeAgentStatus(targetAgent.id, 'working');
-    }, 900);
-
-    const t2 = window.setTimeout(() => {
-      setCycleMessage(`${targetAgent.name}: Pasando a Oficina de Sheldon · Revisión`);
-      onChangeAgentStatus(targetAgent.id, 'waiting_sheldon');
-    }, 5200);
-
-    const t3 = window.setTimeout(() => {
-      setCycleMessage(`${targetAgent.name}: Tarea finalizada · Regresando a Zona de descanso`);
-      onChangeAgentStatus(targetAgent.id, 'idle');
-    }, 9400);
-
-    const t4 = window.setTimeout(() => {
-      setSimulatingCycle(false);
-      setCycleMessage('');
-    }, 13000);
-
-    cycleTimersRef.current = [t1, t2, t3, t4];
-  };
 
   const selectedAgent =
     agents.find((a) => a.id === selectedAgentId) ?? agents[0];
@@ -798,191 +744,18 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         </span>
       </div>
 
-      {/* Unified Collapsible Bottom Control & Simulation Dock (Zero Side Occlusion, No backdrop-blur) */}
-      <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 w-[min(960px,94%)] -translate-x-1/2">
-        <div className="flex flex-col items-center">
-          <button
-            type="button"
-            onClick={() => setDockExpanded((prev) => !prev)}
-            className="pointer-events-auto flex items-center gap-1.5 rounded-t-xl border border-b-0 border-slate-700/80 bg-[#0B1220]/95 px-4 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-cyan-300"
-          >
-            {dockExpanded ? (
-              <>
-                <ChevronDown className="h-3.5 w-3.5" />
-                <span>Ocultar Controles (H)</span>
-              </>
-            ) : (
-              <>
-                <ChevronUp className="h-3.5 w-3.5" />
-                <span>Mostrar Simulación y Cámaras (H)</span>
-              </>
-            )}
-          </button>
-
-          {dockExpanded && (
-            <div className="pointer-events-auto w-full rounded-2xl border border-slate-800/90 bg-[#0B1220]/96 p-4 shadow-2xl">
-              {/* Row 1: Camera Presets + Cycle Simulation Trigger */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="mr-1 flex items-center gap-1.5 text-xs text-slate-400">
-                    <Eye className="h-3.5 w-3.5 text-cyan-400" />
-                    <span>Cámara</span>
-                  </span>
-                  {(Object.keys(CAMERA_PRESETS) as CameraPresetKey[]).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => flyToPreset(key)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all active:scale-95 ${
-                        activePreset === key
-                          ? 'bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/60'
-                          : 'bg-slate-900/90 text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                      }`}
-                    >
-                      {CAMERA_PRESETS[key].label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => flyToPreset('overview')}
-                    title="Restablecer vista"
-                    className="ml-1 flex items-center gap-1 rounded-lg bg-slate-900/90 px-2.5 py-1.5 text-xs text-slate-400 transition-all hover:bg-slate-800 hover:text-slate-100 active:scale-95"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2.5">
-                  {cycleMessage && (
-                    <span className="font-mono text-[11px] text-cyan-300">
-                      {cycleMessage}
-                    </span>
-                  )}
-                  {simulatingCycle ? (
-                    <button
-                      type="button"
-                      onClick={stopCycleSimulation}
-                      className="flex items-center gap-1.5 rounded-xl bg-rose-500/20 px-3.5 py-1.5 text-xs font-medium text-rose-300 ring-1 ring-rose-500/50 transition-all hover:bg-rose-500/30 active:scale-95 whitespace-nowrap"
-                    >
-                      <Square className="h-3 w-3" />
-                      <span>Detener Simulación</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={runFullCycleSimulation}
-                      className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 hover:from-cyan-300 hover:to-sky-300 active:translate-y-0 active:scale-95 whitespace-nowrap"
-                    >
-                      <Play className="h-3 w-3" />
-                      <span>Simular Recorrido Completo</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 2: Quick Agent State Simulator & Selected Agent Telemetry */}
-              {selectedAgent && (
-                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-center">
-                  {/* Agent Selector */}
-                  <div className="flex items-center gap-2 lg:col-span-4">
-                    <Users className="h-4 w-4 shrink-0 text-slate-400" />
-                    <label htmlFor="agent-sim-select" className="sr-only">
-                      Seleccionar agente
-                    </label>
-                    <select
-                      id="agent-sim-select"
-                      value={selectedAgent.id}
-                      onChange={(e) => setSelectedAgentId(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2 text-xs font-medium text-slate-100 focus:border-cyan-400 focus:outline-none"
-                    >
-                      {agents.map((ag) => (
-                        <option key={ag.id} value={ag.id}>
-                          {ag.name} — {ag.title} ({STATUS_META[ag.status].label})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Direct State Transition Buttons */}
-                  <div className="flex flex-wrap items-center gap-1.5 lg:col-span-5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopCycleSimulation();
-                        onChangeAgentStatus(selectedAgent.id, 'working');
-                      }}
-                      className={`flex-1 rounded-xl px-2.5 py-2 text-xs font-medium whitespace-nowrap transition-all active:scale-95 ${
-                        selectedAgent.status === 'working'
-                          ? 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/70'
-                          : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      Trabajar · Laboratorio
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopCycleSimulation();
-                        onChangeAgentStatus(selectedAgent.id, 'waiting_sheldon');
-                      }}
-                      className={`flex-1 rounded-xl px-2.5 py-2 text-xs font-medium whitespace-nowrap transition-all active:scale-95 ${
-                        selectedAgent.status === 'waiting_sheldon'
-                          ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/70'
-                          : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      Revisión · Oficina de Sheldon
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopCycleSimulation();
-                        onChangeAgentStatus(selectedAgent.id, 'idle');
-                      }}
-                      className={`flex-1 rounded-xl px-2.5 py-2 text-xs font-medium whitespace-nowrap transition-all active:scale-95 ${
-                        selectedAgent.status === 'idle'
-                          ? 'bg-slate-700/60 text-slate-100 ring-1 ring-slate-400/70'
-                          : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      Descansar · Zona de descanso
-                    </button>
-                  </div>
-
-                  {/* Compact Agent Telemetry */}
-                  <div className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2 text-xs lg:col-span-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 text-slate-200">
-                        <Cpu className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
-                        <span className="truncate font-mono text-[11px]">
-                          {MODEL_TIER_META[selectedAgent.modelTier].shortLabel}
-                        </span>
-                      </div>
-                      <div className="truncate text-[11px] text-slate-400">
-                        {selectedAgent.currentTask}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right font-mono text-[11px]">
-                      <div
-                        className={
-                          selectedAgent.ramKb === 0
-                            ? 'text-slate-400'
-                            : 'text-emerald-400'
-                        }
-                      >
-                        {selectedAgent.ramKb === 0
-                          ? 'En reposo'
-                          : `${Math.round(selectedAgent.ramKb / 1024)} MB`}
-                      </div>
-                      <div className="text-[10px] text-slate-500">RAM</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+            {/* Panel lateral derecho con chat de mando y telemetría (H02) */}
+      <OfficeControlPanel
+        agents={agents}
+        selectedAgentId={selectedAgentId}
+        onSelectAgent={setSelectedAgentId}
+        onChangeAgentStatus={onChangeAgentStatus}
+        onFlyToPreset={flyToPreset}
+        activePreset={activePreset}
+        isCollapsed={isRightPanelCollapsed}
+        onToggleCollapse={() => setIsRightPanelCollapsed((prev) => !prev)}
+        onCreateAgent={onCreateAgent}
+      />
     </div>
   );
 };
