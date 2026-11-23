@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/3c67ef6c-92df-4a07-a3a7-50423
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Configura `VITE_API_URL` en [.env.example](.env.example) o `.env.local`
 3. Run the app:
    `npm run dev`
 # FlowClic-Oficina-IA---FRONT
