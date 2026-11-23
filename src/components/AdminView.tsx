@@ -13,6 +13,7 @@ import type { ApiSetupStatus } from '../api/types';
 import { Agent } from '../types/orbis';
 import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
+import { ConnectionsPanel } from './ConnectionsPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
 
 type AdminTab =
@@ -28,7 +29,7 @@ type AdminTab =
 
 const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'workspaces', label: 'Espacios de trabajo', enabled: true },
-  { id: 'connections', label: 'Conexiones API', enabled: false },
+  { id: 'connections', label: 'Conexiones API', enabled: true },
   { id: 'agents', label: 'Agentes', enabled: true },
   { id: 'project', label: 'Proyecto', enabled: false },
   { id: 'rules', label: 'Reglas', enabled: false },
@@ -124,6 +125,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
       <div className="flex-1 overflow-auto p-5 lg:px-8">
         {tab === 'workspaces' && <WorkspacesPanel />}
+
+        {tab === 'connections' && <ConnectionsPanel agents={agents} />}
 
         {tab === 'db' && (
           <section className="max-w-3xl rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">

@@ -96,6 +96,7 @@ export const api = {
       'GET',
       `/api/admin/agents/${encodeURIComponent(agentId)}/credentials`
     ),
+  listAllCredentials: () => request<ApiCredential[]>('GET', '/api/admin/credentials'),
   addCredential: (
     agentId: string,
     body: { provider: CredentialProvider; label: string; secret: string }
