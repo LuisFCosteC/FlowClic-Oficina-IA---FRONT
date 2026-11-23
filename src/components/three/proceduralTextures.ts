@@ -329,7 +329,7 @@ export function createSheldonWhiteboardTexture(
     ctx.stroke();
     ctx.fillStyle = '#b91c1c';
     ctx.font = 'bold 26px "JetBrains Mono", monospace';
-    ctx.fillText('IDLE RAM = 0 KB !', 376, 421);
+    ctx.fillText('IDLE = REPOSO !', 376, 421);
   } else if (variant === 'left') {
     ctx.fillStyle = '#0f172a';
     ctx.font = 'bold 30px "JetBrains Mono", monospace';

@@ -452,7 +452,7 @@ export function updateAvatarAnimation(
       dt
     );
   } else {
-    // Relaxing / IDLE in BBT Apartment (memory purged)
+    // Relaxing / IDLE in Zona de descanso
     rig.leftLegPivot.rotation.x = THREE.MathUtils.damp(
       rig.leftLegPivot.rotation.x,
       -0.55,

@@ -54,31 +54,31 @@ export const TASK_STAGE_META: Record<
 export const STATUS_META = {
   working: {
     label: 'Trabajando',
-    zoneLabel: 'Zona A · Laboratorio',
+    zoneLabel: 'Laboratorio',
     color: '#10B981',
     textClass: 'text-emerald-400',
   },
   waiting_sheldon: {
     label: 'Esperando a Sheldon',
-    zoneLabel: 'Zona B · Pizarra de Sheldon',
+    zoneLabel: 'Oficina de Sheldon',
     color: '#F59E0B',
     textClass: 'text-amber-400',
   },
   idle: {
-    label: 'Descansando · 0 KB',
-    zoneLabel: 'Zona C · Apartamento BBT',
+    label: 'Descansando',
+    zoneLabel: 'Zona de descanso',
     color: '#64748B',
     textClass: 'text-slate-400',
   },
   blocked: {
     label: 'Bloqueado',
-    zoneLabel: 'Zona B · Pizarra de Sheldon',
+    zoneLabel: 'Oficina de Sheldon',
     color: '#F43F5E',
     textClass: 'text-rose-400',
   },
   sleep_quota: {
     label: 'En pausa por cuota',
-    zoneLabel: 'Zona C · Apartamento BBT',
+    zoneLabel: 'Zona de descanso',
     color: '#8B5CF6',
     textClass: 'text-violet-400',
   },

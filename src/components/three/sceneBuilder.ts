@@ -15,7 +15,7 @@ export interface ZoneSlot {
   yaw: number;
 }
 
-// Zona A: Lab Workstations (facing monitors)
+// Laboratorio: Workstations (facing monitors)
 export const WORKSTATION_SLOTS: ZoneSlot[] = [
   { x: -11.4, z: -3.2, yaw: Math.PI },
   { x: -8.9, z: -3.2, yaw: Math.PI },
@@ -31,7 +31,7 @@ export const WORKSTATION_SLOTS: ZoneSlot[] = [
   { x: -12.6, z: -1.4, yaw: -Math.PI / 2 },
 ];
 
-// Zona B: Sheldon's Whiteboard & Review Hub
+// Oficina de Sheldon: Work & Review Hub
 export const SHELDON_CTO_SLOT: ZoneSlot = { x: 0.2, z: -3.4, yaw: 0 };
 
 export const REVIEW_SLOTS: ZoneSlot[] = [
@@ -46,7 +46,7 @@ export const REVIEW_SLOTS: ZoneSlot[] = [
   { x: 2.5, z: -2.6, yaw: Math.PI * 0.45 },
 ];
 
-// Zona C: BBT Apartment Rest & Lounge Zone
+// Zona de descanso: Rest & Lounge Zone
 export const LOUNGE_SLOTS: ZoneSlot[] = [
   { x: 7.4, z: -0.4, yaw: 0 }, // Sofa left
   { x: 8.8, z: -0.4, yaw: 0 }, // Sofa center
@@ -63,23 +63,23 @@ export const LOUNGE_SLOTS: ZoneSlot[] = [
 
 export const ZONE_LABEL_ANCHORS = [
   {
-    id: 'zona-a',
-    title: 'ZONA A · LABORATORIO',
+    id: 'laboratorio',
+    title: 'LABORATORIO',
     subtitle: 'Estaciones de Trabajo',
     pos: new THREE.Vector3(-8.9, 3.3, -6.2),
     accent: '#06B6D4',
   },
   {
-    id: 'zona-b',
-    title: 'ZONA B · PIZARRA DE SHELDON',
-    subtitle: 'Oficina de Revisión CTO',
+    id: 'oficina-sheldon',
+    title: 'OFICINA DE SHELDON',
+    subtitle: 'Revisión y Arquitectura CTO',
     pos: new THREE.Vector3(0.2, 3.6, -6.2),
     accent: '#F59E0B',
   },
   {
-    id: 'zona-c',
-    title: 'ZONA C · APARTAMENTO BBT',
-    subtitle: 'Descanso · Memoria Purgada',
+    id: 'zona-descanso',
+    title: 'ZONA DE DESCANSO',
+    subtitle: 'Lounge & Reposo',
     pos: new THREE.Vector3(9.2, 3.3, -6.2),
     accent: '#FB923C',
   },
@@ -212,7 +212,7 @@ export function buildColmenaOffice(
   addPartition(4.1);
 
   // =========================================================================
-  // ZONA A: ESTACIONES DE TRABAJO (LABORATORIO)
+  // LABORATORIO: ESTACIONES DE TRABAJO
   // =========================================================================
   const labFloorTex = trackTex(createLabFloorTexture(maxAnisotropy));
   const labFloorMat = trackMat(
@@ -234,7 +234,7 @@ export function buildColmenaOffice(
   labFloor.receiveShadow = true;
   scene.add(labFloor);
 
-  // Zone A border accent line
+  // Laboratorio border accent line
   const zoneABar = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(10.2, 0.03, 0.08)),
     trackMat(
@@ -249,7 +249,7 @@ export function buildColmenaOffice(
   zoneABar.position.set(-9.1, 0.025, 6.85);
   scene.add(zoneABar);
 
-  // Build 9 composite workstations in Zona A (3x3 grid matching WORKSTATION_SLOTS[0..8])
+  // Build 9 composite workstations in Laboratorio (3x3 grid matching WORKSTATION_SLOTS[0..8])
   const deskTopMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x131d31,
@@ -370,7 +370,7 @@ export function buildColmenaOffice(
     buildWorkstation(WORKSTATION_SLOTS[i].x, WORKSTATION_SLOTS[i].z, i);
   }
 
-  // Server Racks along Zona A back wall
+  // Server Racks along Laboratorio back wall
   const serverTex = trackTex(createServerRackTexture(maxAnisotropy));
   const serverFaceMat = trackMat(
     new THREE.MeshStandardMaterial({
@@ -403,7 +403,7 @@ export function buildColmenaOffice(
   });
 
   // =========================================================================
-  // ZONA B: OFICINA DE REUNIONES Y REVISIÓN (LA PIZARRA DE SHELDON)
+  // OFICINA DE SHELDON: REUNIONES Y REVISIÓN
   // =========================================================================
   const daisMat = trackMat(
     new THREE.MeshStandardMaterial({
@@ -520,7 +520,7 @@ export function buildColmenaOffice(
     true
   );
 
-  // Central Holographic Architecture Table in Zona B
+  // Central Holographic Architecture Table in Oficina de Sheldon
   const holoTable = new THREE.Group();
   holoTable.position.set(0.2, 0.08, 0.4);
   const tableBase = new THREE.Mesh(
@@ -573,7 +573,7 @@ export function buildColmenaOffice(
   scene.add(holoTable, holoOrb);
 
   // =========================================================================
-  // ZONA C: ZONA DE DESCANSO (APARTAMENTO BBT)
+  // ZONA DE DESCANSO: SALA DE DESCANSO Y REPOSO
   // =========================================================================
   const woodTex = trackTex(createWoodFloorTexture(maxAnisotropy));
   const woodFloor = new THREE.Mesh(
@@ -594,7 +594,7 @@ export function buildColmenaOffice(
   woodFloor.receiveShadow = true;
   scene.add(woodFloor);
 
-  // Zone C warm amber border line
+  // Zona de descanso warm amber border line
   const zoneCBar = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(9.8, 0.03, 0.08)),
     trackMat(
@@ -609,7 +609,7 @@ export function buildColmenaOffice(
   zoneCBar.position.set(9.45, 0.03, 6.85);
   scene.add(zoneCBar);
 
-  // Patterned BBT living room rug
+  // Patterned living room rug
   const rugTex = trackTex(createBbtRugTexture(maxAnisotropy));
   const rug = new THREE.Mesh(
     trackGeo(new THREE.PlaneGeometry(5.6, 4.1)),
@@ -626,7 +626,7 @@ export function buildColmenaOffice(
   rug.receiveShadow = true;
   scene.add(rug);
 
-  // Iconic BBT Leather Sofa (composite 7-part couch with Sheldon's spot cushion)
+  // Leather Sofa (composite 7-part couch with Sheldon's spot cushion)
   const leatherMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x7c4328,
@@ -729,7 +729,7 @@ export function buildColmenaOffice(
     coffeeTable.add(leg);
   });
 
-  // Takeout food boxes (nod to BBT Thai food nights!)
+  // Takeout food boxes (Thai food nights)
   const takeoutMat = trackMat(
     new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7 })
   );
@@ -789,7 +789,7 @@ export function buildColmenaOffice(
   tvUnit.add(tvScreen);
   scene.add(tvUnit);
 
-  // Two-tier Rest Bunk Pods (Camas estilo litera/descanso) along Zona C back wall
+  // Two-tier Rest Bunk Pods along back wall
   const mattressMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x334155,
@@ -899,7 +899,7 @@ export function buildColmenaOffice(
   buildRestBunk(6.8, -6.25);
   buildRestBunk(9.7, -6.25);
 
-  // Iconic BBT DNA Double Helix Sculpture on pedestal (right corner of Zona C)
+  // DNA Double Helix Sculpture on pedestal (right corner of Zona de descanso)
   const dnaPedestal = new THREE.Mesh(
     trackGeo(new THREE.CylinderGeometry(0.45, 0.52, 0.45, 16)),
     darkMetalMat
@@ -945,7 +945,7 @@ export function buildColmenaOffice(
   }
   scene.add(dnaHelix);
 
-  // Warm Floor Lamp beside BBT Sofa
+  // Warm Floor Lamp beside Sofa
   const lampGroup = new THREE.Group();
   lampGroup.position.set(12.2, 0, -1.1);
   const lampStem = new THREE.Mesh(
@@ -993,12 +993,12 @@ export function buildColmenaOffice(
   }
   scene.add(keyLight);
 
-  // Zona A: Cool Cyan Monitor Lab Glow
+  // Laboratorio: Cool Cyan Monitor Lab Glow
   const labLight = new THREE.PointLight(0x06b6d4, 18, 17, 1.6);
   labLight.position.set(-9.0, 4.2, 0.2);
   scene.add(labLight);
 
-  // Zona B: Focal SpotLight on Sheldon's Whiteboard & Architecture Table
+  // Oficina de Sheldon: Focal SpotLight on Whiteboard & Architecture Table
   const sheldonSpot = new THREE.SpotLight(
     0xfffbeb,
     38,
@@ -1011,7 +1011,7 @@ export function buildColmenaOffice(
   sheldonSpot.target.position.set(0.2, 0.8, -3.5);
   scene.add(sheldonSpot, sheldonSpot.target);
 
-  // Zona C: Warm Cozy Amber Apartment Light + TV Ambient Glow
+  // Zona de descanso: Warm Cozy Amber Light + TV Ambient Glow
   const loungeWarmLight = new THREE.PointLight(0xfb923c, 22, 16, 1.5);
   loungeWarmLight.position.set(11.0, 3.8, -0.5);
   scene.add(loungeWarmLight);

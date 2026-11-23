@@ -175,7 +175,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
           >
             <div className="text-xs text-slate-400">Memoria efímera purgada</div>
             <div className="mt-2 font-mono text-2xl font-semibold text-emerald-400">
-              {purgedAgentsCount} / {agents.length} en 0 KB
+              {purgedAgentsCount} / {agents.length} en reposo
             </div>
             <div className="mt-1 font-mono text-xs text-slate-400">
               Consumo activo total: {totalRamMb} MB RAM
@@ -441,7 +441,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                   Monitor de Memoria Efímera de FlowClic
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Los agentes en estado IDLE liberan su contexto completo a 0 KB RAM y descansan en Zona C.
+                  Los agentes en estado IDLE liberan su contexto completo y descansan en la Zona de descanso.
                 </p>
               </div>
             </div>
@@ -454,7 +454,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                     id: 'active',
                     label: `Activos (${agents.length - purgedAgentsCount})`,
                   },
-                  { id: 'purged', label: `Purgados 0 KB (${purgedAgentsCount})` },
+                  { id: 'purged', label: `En reposo (${purgedAgentsCount})` },
                 ] as const
               ).map((tab) => (
                 <button
@@ -539,7 +539,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                           }
                         >
                           {isPurged
-                            ? '0 KB · PURGADA'
+                            ? 'EN REPOSO'
                             : `${Math.round(agent.ramKb / 1024)} MB`}
                         </span>
                       </td>
@@ -553,7 +553,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                             className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300 transition-all hover:bg-emerald-500/20 active:scale-95 whitespace-nowrap"
                           >
                             <RefreshCw className="h-3 w-3" />
-                            <span>Despertar (Zona A)</span>
+                            <span>Trabajar (Laboratorio)</span>
                           </button>
                         ) : (
                           <button
@@ -562,7 +562,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-1.5 text-[11px] font-medium text-slate-300 transition-all hover:border-amber-500/50 hover:text-amber-200 active:scale-95 whitespace-nowrap"
                           >
                             <Trash2 className="h-3 w-3" />
-                            <span>Purgar a 0 KB</span>
+                            <span>Descansar (Zona de descanso)</span>
                           </button>
                         )}
                       </td>

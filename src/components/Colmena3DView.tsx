@@ -36,7 +36,7 @@ interface Colmena3DViewProps {
   onChangeAgentStatus: (agentId: string, status: AgentStatus) => void;
 }
 
-type CameraPresetKey = 'overview' | 'zona_a' | 'zona_b' | 'zona_c';
+type CameraPresetKey = 'overview' | 'laboratorio' | 'oficina_sheldon' | 'zona_descanso';
 
 const CAMERA_PRESETS: Record<
   CameraPresetKey,
@@ -47,18 +47,18 @@ const CAMERA_PRESETS: Record<
     pos: [0.2, 16.5, 22.0],
     target: [0.2, 0.6, -0.8],
   },
-  zona_a: {
-    label: 'Zona A · Lab',
+  laboratorio: {
+    label: 'Laboratorio',
     pos: [-9.2, 10.5, 12.2],
     target: [-8.9, 0.8, 0.2],
   },
-  zona_b: {
-    label: 'Zona B · Sheldon',
+  oficina_sheldon: {
+    label: 'Oficina de Sheldon',
     pos: [0.2, 8.8, 10.6],
     target: [0.2, 1.1, -2.5],
   },
-  zona_c: {
-    label: 'Zona C · BBT',
+  zona_descanso: {
+    label: 'Zona de descanso',
     pos: [9.4, 10.2, 12.8],
     target: [9.0, 0.8, 0.2],
   },
@@ -76,9 +76,9 @@ function shortestAngleDiff(current: number, target: number): number {
 }
 
 function getZoneIndex(x: number): number {
-  if (x < -3.7) return 0; // Zona A
-  if (x > 4.1) return 2; // Zona C
-  return 1; // Zona B
+  if (x < -3.7) return 0; // Laboratorio
+  if (x > 4.1) return 2; // Zona de descanso
+  return 1; // Oficina de Sheldon
 }
 
 function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
@@ -295,7 +295,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     };
     controls.addEventListener('start', onControlStart);
 
-    // Build 3-zone BBT Tech Office diorama
+    // Build 3-zone Tech Office diorama
     const maxAniso = renderer.capabilities.getMaxAnisotropy();
     const builtOffice = buildColmenaOffice(scene, maxAniso, isSoftwareGl);
 
@@ -660,22 +660,22 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     setSimulatingCycle(true);
     flyToPreset('overview');
 
-    // Step 1: Start in Zona C (Rest) -> Walk to Zona A (Work) -> Walk to Zona B (Sheldon Review) -> Back to Zona C (Purge 0 KB)
-    setCycleMessage(`${targetAgent.name}: Saliendo del Apartamento BBT → Laboratorio`);
+    // Step 1: Start in Zona de descanso -> Walk to Laboratorio -> Walk to Oficina de Sheldon -> Back to Zona de descanso
+    setCycleMessage(`${targetAgent.name}: Saliendo de Zona de descanso → Laboratorio`);
     onChangeAgentStatus(targetAgent.id, 'idle');
 
     const t1 = window.setTimeout(() => {
-      setCycleMessage(`${targetAgent.name}: Caminando a Zona A · Ejecutando código`);
+      setCycleMessage(`${targetAgent.name}: Caminando a Laboratorio · Ejecutando código`);
       onChangeAgentStatus(targetAgent.id, 'working');
     }, 900);
 
     const t2 = window.setTimeout(() => {
-      setCycleMessage(`${targetAgent.name}: Pasando a Zona B · Revisión en Pizarra de Sheldon`);
+      setCycleMessage(`${targetAgent.name}: Pasando a Oficina de Sheldon · Revisión`);
       onChangeAgentStatus(targetAgent.id, 'waiting_sheldon');
     }, 5200);
 
     const t3 = window.setTimeout(() => {
-      setCycleMessage(`${targetAgent.name}: Memoria purgada (0 KB) · Regresando a Zona C`);
+      setCycleMessage(`${targetAgent.name}: Tarea finalizada · Regresando a Zona de descanso`);
       onChangeAgentStatus(targetAgent.id, 'idle');
     }, 9400);
 
@@ -794,7 +794,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
           ·
         </span>
         <span className="font-mono text-slate-400 whitespace-nowrap">
-          Descansando (0 KB): {idleCount}
+          Descansando: {idleCount}
         </span>
       </div>
 
@@ -917,7 +917,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
                           : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
-                      Trabajar · Zona A
+                      Trabajar · Laboratorio
                     </button>
                     <button
                       type="button"
@@ -931,7 +931,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
                           : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
-                      Revisión · Zona B
+                      Revisión · Oficina de Sheldon
                     </button>
                     <button
                       type="button"
@@ -945,7 +945,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
                           : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
-                      Descansar · 0 KB
+                      Descansar · Zona de descanso
                     </button>
                   </div>
 
@@ -971,7 +971,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
                         }
                       >
                         {selectedAgent.ramKb === 0
-                          ? '0 KB'
+                          ? 'En reposo'
                           : `${Math.round(selectedAgent.ramKb / 1024)} MB`}
                       </div>
                       <div className="text-[10px] text-slate-500">RAM</div>

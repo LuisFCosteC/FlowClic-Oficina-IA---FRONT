@@ -327,7 +327,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
                 Zona Inicial en 3D
               </span>
               <div className="rounded-xl border border-slate-800 bg-[#070B12] px-3 py-2.5 text-xs text-slate-400">
-                Descansando · Zona C (todo agente nuevo empieza en reposo)
+                Descansando · Zona de descanso (todo agente nuevo empieza en reposo)
               </div>
             </div>
           </div>
