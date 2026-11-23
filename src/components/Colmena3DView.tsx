@@ -51,18 +51,18 @@ const CAMERA_PRESETS: Record<
 > = {
   overview: {
     label: 'Vista General',
-    pos: [4, 48, 42],
+    pos: [0, 52, 45],
     target: [0, 0, 0],
   },
   oficina_ceo: {
     label: 'Oficina del CEO',
-    pos: [-23.5, 14.5, 14.0],
-    target: [-23.5, 1.2, 0],
+    pos: [-23.5, 14.5, 4.5],
+    target: [-23.5, 0.8, -7.7],
   },
   laboratorio: {
     label: 'Laboratorio',
-    pos: [-7.5, 13.5, 20.5],
-    target: [-7.5, 0.8, 7.7],
+    pos: [-15.5, 15.5, 22.0],
+    target: [-15.5, 0.8, 7.7],
   },
   oficina_sheldon: {
     label: 'Oficina de Sheldon',
@@ -76,13 +76,13 @@ const CAMERA_PRESETS: Record<
   },
   sala_juntas: {
     label: 'Sala de juntas',
-    pos: [21.5, 14, 12],
-    target: [21.5, 0.8, 0],
+    pos: [21.5, 13.5, 4.5],
+    target: [21.5, 0.8, -7.7],
   },
   datacenter: {
     label: 'Data Center',
-    pos: [21.5, 13.5, 1.5],
-    target: [21.5, 1.0, -10.5],
+    pos: [21.5, 13.5, 20.5],
+    target: [21.5, 0.8, 7.7],
   },
   zona_descanso: {
     label: 'Zona de descanso',
@@ -107,14 +107,24 @@ function shortestAngleDiff(current: number, target: number): number {
 
 type RoomKey = 'sheldon' | 'senior' | 'laboratorio' | 'descanso' | 'junta' | 'ceo' | 'datacenter';
 
-/** Oficina en la que está un punto, o null si está en el pasillo en cruz. */
+/** Oficina en la que está un punto, o null si está en el pasillo central. */
 function getRoom(x: number, z: number): RoomKey | null {
   const hc = CORRIDOR_W / 2;
-  if (x < -14.2) return 'ceo';
-  if (x > 14.2) return z < -4.5 ? 'datacenter' : 'junta';
-  if (Math.abs(x) < hc || Math.abs(z) < hc) return null;
-  if (z < 0) return x < 0 ? 'sheldon' : 'senior';
-  return x < 0 ? 'laboratorio' : 'descanso';
+  // Pasillo central
+  if (Math.abs(z) < hc) return null;
+
+  if (z < 0) {
+    // Ala Norte
+    if (x < -15.5) return 'ceo';
+    if (x < -1.5) return 'sheldon';
+    if (x < 13.5) return 'senior';
+    return 'junta';
+  } else {
+    // Ala Sur
+    if (x < -1.5) return 'laboratorio';
+    if (x < 13.5) return 'descanso';
+    return 'datacenter';
+  }
 }
 
 function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
@@ -128,38 +138,19 @@ function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[]
   };
 
   if (toRoom && fromRoom !== toRoom) {
-    // Salir de donde está
-    if (fromRoom === 'ceo') {
-      push(-15, 0);
-      push(-12, 0);
-    } else if (fromRoom === 'datacenter') {
-      push(16, -10.5);
-      push(13, 0);
-    } else if (fromRoom === 'junta') {
-      push(16, 0);
-      push(13, 0);
-    } else if (fromRoom) {
+    // Salir de donde está hacia el pasillo central horizontal (z = 0)
+    if (fromRoom) {
       const doorFrom = DOORS[fromRoom];
-      push(doorFrom.x, doorFrom.z + Math.sign(from.z) * 1.4); // dentro, junto a la puerta
-      push(doorFrom.x, 0); // al pasillo
-    } else if (Math.abs(from.z) >= CORRIDOR_W / 2) {
-      push(from.x, 0); // desde el pasillo vertical al cruce
-    }
-    // Entrar a la oficina de destino
-    if (toRoom === 'ceo') {
-      push(-12, 0);
-      push(-16, 0);
-    } else if (toRoom === 'datacenter') {
-      push(13, 0);
-      push(16, -10.5);
-    } else if (toRoom === 'junta') {
-      push(13, 0);
-      push(16, 0);
+      push(doorFrom.x, doorFrom.z + Math.sign(from.z) * 1.4);
+      push(doorFrom.x, 0);
     } else {
-      const doorTo = DOORS[toRoom];
-      push(doorTo.x, 0);
-      push(doorTo.x, doorTo.z + Math.sign(to.z) * 1.4);
+      push(from.x, 0);
     }
+
+    // Desplazarse por el pasillo central y entrar a la oficina destino
+    const doorTo = DOORS[toRoom];
+    push(doorTo.x, 0);
+    push(doorTo.x, doorTo.z + Math.sign(to.z) * 1.4);
   }
 
   if (toRoom === 'sheldon') {

@@ -19,11 +19,18 @@ export interface ZoneSlot {
 }
 
 // ---------------------------------------------------------------------------
-// Distribución: 4 oficinas en cuadrícula 2x2 con un pasillo en cruz en medio.
-//   Fondo:  Oficina de Sheldon (izq.)  |  Oficina del Senior full-stack (der.)
-//   Frente: Laboratorio (izq., frente a Sheldon) | Zona de descanso (der., frente al Senior)
-// El mobiliario de cada zona se construye con sus coordenadas originales dentro de un grupo
-// que se desplaza al sitio de la zona (ZONE_OFFSETS). Los puestos se desplazan igual.
+// Distribución Arquitectónica FlowClic Oficina IA:
+//   - Ala Norte (Fondo):
+//       * Extremo Izquierdo: OFICINA DEL CEO (cx: -23.5, cz: -7.7, w: 16, d: 12.4)
+//       * Centro Izquierdo:  OFICINA DE SHELDON (cx: -7.5, cz: -7.7, w: 12, d: 12.4) -> PEGADA AL CEO
+//       * Centro Derecho:    OFICINA DEL SENIOR (cx: 7.5, cz: -7.7, w: 12, d: 12.4)
+//       * Extremo Derecho:   SALA DE JUNTAS (cx: 21.5, cz: -7.7, w: 14, d: 12.4) -> AL LADO DEL SENIOR
+//   - Pasillo Horizontal Central (z = 0, CORRIDOR_W = 3) con el logo central
+//   - Ala Sur (Frente):
+//       * Izquierda completa: LABORATORIO EXPANDIDO (cx: -15.5, cz: 7.7, w: 28, d: 12.4) -> 20 PUESTOS DE TRABAJO,
+//                              ubicado enfrente de la Oficina de Sheldon y la Oficina del CEO.
+//       * Centro Derecho:    ZONA DE DESCANSO (cx: 7.5, cz: 7.7, w: 12, d: 12.4)
+//       * Extremo Derecho:   DATA CENTER (cx: 21.5, cz: 7.7, w: 14, d: 12.4) -> AL FRENTE DE SALA DE JUNTAS Y AL LADO DE DESCANSO
 // ---------------------------------------------------------------------------
 export const ROOM_W = 12;
 export const ROOM_D = 12.4;
@@ -31,7 +38,7 @@ export const CORRIDOR_W = 3;
 export const ROOM_CX = CORRIDOR_W / 2 + ROOM_W / 2; // 7.5
 export const ROOM_CZ = CORRIDOR_W / 2 + ROOM_D / 2; // 7.7
 
-// Centro original de cada zona (coordenadas con las que está escrito el mobiliario)
+// Centro original de cada zona (coordenadas con las que está escrito el mobiliario base)
 const ORIG = {
   laboratorio: { x: -9.1, z: -0.2 },
   sheldon: { x: 0.2, z: -0.2 },
@@ -41,8 +48,10 @@ const offsetTo = (orig: { x: number; z: number }, cx: number, cz: number) => ({
   dx: cx - orig.x,
   dz: cz - orig.z,
 });
+
+// El laboratorio expandido tiene su centro en x = -15.5, z = 7.7
 export const ZONE_OFFSETS = {
-  laboratorio: offsetTo(ORIG.laboratorio, -ROOM_CX, ROOM_CZ),
+  laboratorio: offsetTo(ORIG.laboratorio, -15.5, ROOM_CZ),
   sheldon: offsetTo(ORIG.sheldon, -ROOM_CX, -ROOM_CZ),
   descanso: offsetTo(ORIG.descanso, ROOM_CX, ROOM_CZ),
 };
@@ -50,20 +59,36 @@ export const ZONE_OFFSETS = {
 type Offset = { dx: number; dz: number };
 const shiftSlot = (s: ZoneSlot, o: Offset): ZoneSlot => ({ ...s, x: s.x + o.dx, z: s.z + o.dz });
 
-// Laboratorio: Workstations (facing monitors)
+// Laboratorio: 20 Workstations ampliadas (5 columnas x 4 filas frente a monitores)
+// con pasillos amplios de tránsito
 const RAW_WORKSTATION_SLOTS: ZoneSlot[] = [
-  { x: -11.4, z: -3.2, yaw: Math.PI },
-  { x: -8.9, z: -3.2, yaw: Math.PI },
-  { x: -6.4, z: -3.2, yaw: Math.PI },
-  { x: -11.4, z: 0.4, yaw: Math.PI },
-  { x: -8.9, z: 0.4, yaw: Math.PI },
-  { x: -6.4, z: 0.4, yaw: Math.PI },
-  { x: -11.4, z: 4.0, yaw: Math.PI },
-  { x: -8.9, z: 4.0, yaw: Math.PI },
-  { x: -6.4, z: 4.0, yaw: Math.PI },
-  { x: -12.6, z: 2.2, yaw: -Math.PI / 2 },
-  { x: -5.0, z: 2.2, yaw: Math.PI / 2 },
-  { x: -12.6, z: -1.4, yaw: -Math.PI / 2 },
+  // Fila 1 (Norte)
+  { x: -19.5, z: -3.8, yaw: Math.PI },
+  { x: -16.5, z: -3.8, yaw: Math.PI },
+  { x: -13.5, z: -3.8, yaw: Math.PI },
+  { x: -10.5, z: -3.8, yaw: Math.PI },
+  { x: -7.5, z: -3.8, yaw: Math.PI },
+
+  // Fila 2
+  { x: -19.5, z: -1.2, yaw: Math.PI },
+  { x: -16.5, z: -1.2, yaw: Math.PI },
+  { x: -13.5, z: -1.2, yaw: Math.PI },
+  { x: -10.5, z: -1.2, yaw: Math.PI },
+  { x: -7.5, z: -1.2, yaw: Math.PI },
+
+  // Fila 3
+  { x: -19.5, z: 1.4, yaw: Math.PI },
+  { x: -16.5, z: 1.4, yaw: Math.PI },
+  { x: -13.5, z: 1.4, yaw: Math.PI },
+  { x: -10.5, z: 1.4, yaw: Math.PI },
+  { x: -7.5, z: 1.4, yaw: Math.PI },
+
+  // Fila 4 (Sur)
+  { x: -19.5, z: 4.0, yaw: Math.PI },
+  { x: -16.5, z: 4.0, yaw: Math.PI },
+  { x: -13.5, z: 4.0, yaw: Math.PI },
+  { x: -10.5, z: 4.0, yaw: Math.PI },
+  { x: -7.5, z: 4.0, yaw: Math.PI },
 ];
 
 // Oficina de Sheldon: Work & Review Hub (Apartamento 4A)
@@ -118,11 +143,11 @@ export const LOUNGE_SLOTS: ZoneSlot[] = RAW_LOUNGE_SLOTS.map((s) =>
 export const DOORS = {
   sheldon: { x: -ROOM_CX, z: -CORRIDOR_W / 2 },
   senior: { x: ROOM_CX, z: -CORRIDOR_W / 2 },
-  junta: { x: 14.5, z: 0 },
-  laboratorio: { x: -ROOM_CX, z: CORRIDOR_W / 2 },
+  junta: { x: 21.5, z: -CORRIDOR_W / 2 },
+  laboratorio: { x: -15.5, z: CORRIDOR_W / 2 },
   descanso: { x: ROOM_CX, z: CORRIDOR_W / 2 },
-  ceo: { x: -14.5, z: 0 },
-  datacenter: { x: 14.5, z: -10.5 },
+  ceo: { x: -23.5, z: -CORRIDOR_W / 2 },
+  datacenter: { x: 21.5, z: CORRIDOR_W / 2 },
 };
 
 /**
@@ -148,19 +173,22 @@ export function sheldonDetour(
   ];
 }
 
-// Sala de juntas (extensión al este del pasillo central): una silla por agente.
-export const BOARDROOM = { cx: 21.5, cz: 0, w: 14, d: 9 };
+// Sala de juntas: Al lado de la oficina del Senior en el ala norte (cx: 21.5, cz: -ROOM_CZ)
+export const BOARDROOM = { cx: 21.5, cz: -ROOM_CZ, w: 14, d: ROOM_D };
 
-// Data Center (ala este, al norte de la Sala de Juntas)
-export const DATACENTER = { cx: 21.5, cz: -10.5, w: 14, d: 9 };
+// Data Center: Al frente de la Sala de Juntas y al lado de la Zona de Descanso en el ala sur (cx: 21.5, cz: ROOM_CZ)
+export const DATACENTER = { cx: 21.5, cz: ROOM_CZ, w: 14, d: ROOM_D };
 
-// Oficina del CEO (ala oeste, la más grande de la oficina, a la izquierda de Sheldon y el Laboratorio)
-export const CEO_OFFICE = { cx: -23.5, cz: 0, w: 16, d: 27 };
+// Oficina del CEO: Pegada a la oficina de Sheldon en el ala norte (cx: -23.5, cz: -ROOM_CZ)
+export const CEO_OFFICE = { cx: -23.5, cz: -ROOM_CZ, w: 16, d: ROOM_D };
+
+// Dimensiones del Laboratorio expandido a mano izquierda
+export const LAB_EXPANDED = { cx: -15.5, cz: ROOM_CZ, w: 28, d: ROOM_D };
 
 // Slots de visita frente al escritorio del CEO donde vienen Sheldon y Leonard a esperar aprobaciones
 export const CEO_VISITOR_SLOTS = {
-  chairSheldon: { x: -23.6, z: -1.25, yaw: -Math.PI / 2 } as ZoneSlot,
-  chairLeonard: { x: -23.6, z: 1.25, yaw: -Math.PI / 2 } as ZoneSlot,
+  chairSheldon: { x: -23.6, z: -ROOM_CZ - 1.25, yaw: -Math.PI / 2 } as ZoneSlot,
+  chairLeonard: { x: -23.6, z: -ROOM_CZ + 1.25, yaw: -Math.PI / 2 } as ZoneSlot,
 };
 
 const SEAT_SPACING = 1.15;
@@ -221,8 +249,8 @@ export const ZONE_LABEL_ANCHORS = [
   {
     id: 'laboratorio',
     title: 'LABORATORIO',
-    subtitle: 'Estaciones de Trabajo',
-    pos: new THREE.Vector3(-ROOM_CX, 3.3, CORRIDOR_W / 2 + 0.6),
+    subtitle: 'Estaciones de Trabajo (20 Puestos)',
+    pos: new THREE.Vector3(LAB_EXPANDED.cx, 3.3, CORRIDOR_W / 2 + 0.6),
     accent: '#06B6D4',
   },
   {
@@ -230,6 +258,13 @@ export const ZONE_LABEL_ANCHORS = [
     title: 'OFICINA DE SHELDON',
     subtitle: 'Revisión y Arquitectura CTO',
     pos: new THREE.Vector3(-ROOM_CX, 3.6, -ROOM_CZ - ROOM_D / 2 + 0.8),
+    accent: '#F59E0B',
+  },
+  {
+    id: 'oficina-ceo',
+    title: 'OFICINA DEL CEO',
+    subtitle: 'Presidencia & Dirección General',
+    pos: new THREE.Vector3(CEO_OFFICE.cx, 3.8, -ROOM_CZ - ROOM_D / 2 + 0.8),
     accent: '#F59E0B',
   },
   {
@@ -250,15 +285,8 @@ export const ZONE_LABEL_ANCHORS = [
     id: 'data-center',
     title: 'DATA CENTER',
     subtitle: 'Servidores & Cluster GPU',
-    pos: new THREE.Vector3(DATACENTER.cx, 3.3, DATACENTER.cz - DATACENTER.d / 2 + 0.8),
+    pos: new THREE.Vector3(DATACENTER.cx, 3.3, CORRIDOR_W / 2 + 0.6),
     accent: '#06B6D4',
-  },
-  {
-    id: 'oficina-ceo',
-    title: 'OFICINA DEL CEO',
-    subtitle: 'Presidencia & Dirección General',
-    pos: new THREE.Vector3(CEO_OFFICE.cx, 3.8, CEO_OFFICE.cz - CEO_OFFICE.d / 2 + 0.8),
-    accent: '#F59E0B',
   },
   {
     id: 'zona-descanso',
@@ -358,13 +386,15 @@ export function buildColmenaOffice(
   );
 
   // --- Main Platform Base ---
-  const FULL_W = ROOM_W * 2 + CORRIDOR_W; // 27
-  const FULL_D = ROOM_D * 2 + CORRIDOR_W; // 27.8
+  // Abarca todo el complejo: desde x = -32.5 (CEO / Lab) hasta x = 29.5 (Juntas / Data Center)
+  // y z = -14.5 a 14.5
+  const FULL_W = 62;
+  const FULL_D = 29;
   const platform = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(FULL_W + 1.6, 0.44, FULL_D + 1.6)),
+    trackGeo(new THREE.BoxGeometry(FULL_W, 0.44, FULL_D)),
     baseSlabMat
   );
-  platform.position.set(0, -0.22, 0);
+  platform.position.set(-1.5, -0.22, 0);
   platform.receiveShadow = true;
   scene.add(platform);
 
@@ -379,18 +409,18 @@ export function buildColmenaOffice(
     })
   );
   const frontTrim = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(FULL_W + 1.7, 0.06, 0.08)),
+    trackGeo(new THREE.BoxGeometry(FULL_W + 0.2, 0.06, 0.08)),
     trimStripMat
   );
-  frontTrim.position.set(0, -0.02, FULL_D / 2 + 0.8);
+  frontTrim.position.set(-1.5, -0.02, FULL_D / 2 + 0.04);
   scene.add(frontTrim);
 
   // Back Architectural Wall
   const backWall = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(FULL_W + 1.6, 4.1, 0.28)),
+    trackGeo(new THREE.BoxGeometry(FULL_W + 0.2, 4.1, 0.28)),
     backWallMat
   );
-  backWall.position.set(0, 2.05, -FULL_D / 2 - 0.14);
+  backWall.position.set(-1.5, 2.05, -FULL_D / 2 - 0.14);
   backWall.receiveShadow = true;
   scene.add(backWall);
 
@@ -415,23 +445,39 @@ export function buildColmenaOffice(
     scene.add(wall);
   };
   const HC = CORRIDOR_W / 2; // 1.5
-  const DOOR_HALF = 1.2;
-  const OUT = FULL_D / 2; // 13.9
-  // Bordes horizontales (z = ±1.5): un hueco de puerta centrado en cada oficina
-  [-HC, HC].forEach((wz) => {
-    [-ROOM_CX, ROOM_CX].forEach((cx) => {
-      addGlassWall(cx - ROOM_W / 2, wz, cx - DOOR_HALF, wz);
-      addGlassWall(cx + DOOR_HALF, wz, cx + ROOM_W / 2, wz);
-    });
+  const DOOR_HALF = 1.3;
+  // Pared frontal norte de oficinas (z = -HC = -1.5) con puertas a cada una
+  // Oficinas norte: CEO (cx: -23.5), Sheldon (cx: -7.5), Senior (cx: 7.5), Juntas (cx: 21.5)
+  [-23.5, -7.5, 7.5, 21.5].forEach((cx) => {
+    const halfW = cx === -23.5 ? 8 : cx === 21.5 ? 7 : ROOM_W / 2;
+    addGlassWall(cx - halfW, -HC, cx - DOOR_HALF, -HC);
+    addGlassWall(cx + DOOR_HALF, -HC, cx + halfW, -HC);
   });
-  // Bordes verticales (x = ±1.5): paredes enteras entre las oficinas y el pasillo central
-  [-HC, HC].forEach((wx) => {
-    addGlassWall(wx, -OUT, wx, -HC);
-    addGlassWall(wx, HC, wx, OUT);
-  });
+  // Pared frontal sur de oficinas (z = HC = 1.5) con puertas a cada una
+  // Oficinas sur: Lab (cx: -15.5, w: 28), Descanso (cx: 7.5, w: 12), Data Center (cx: 21.5, w: 14)
+  // Lab
+  addGlassWall(-29.5, HC, -15.5 - DOOR_HALF, HC);
+  addGlassWall(-15.5 + DOOR_HALF, HC, -1.5, HC);
+  // Descanso
+  addGlassWall(1.5, HC, 7.5 - DOOR_HALF, HC);
+  addGlassWall(7.5 + DOOR_HALF, HC, 13.5, HC);
+  // Data Center
+  addGlassWall(14.5, HC, 21.5 - DOOR_HALF, HC);
+  addGlassWall(21.5 + DOOR_HALF, HC, 28.5, HC);
+
+  // Paredes divisorias entre oficinas:
+  // Norte (z ∈ [-14.5, -1.5]):
+  addGlassWall(-15.5, -14.5, -15.5, -HC); // Entre CEO y Sheldon (pared divisoria con puerta)
+  addGlassWall(-1.5, -14.5, -1.5, -HC);  // Entre Sheldon y pasillo central
+  addGlassWall(1.5, -14.5, 1.5, -HC);   // Entre pasillo central y Senior
+  addGlassWall(13.5, -14.5, 13.5, -HC);  // Entre Senior y Sala de Juntas
+  // Sur (z ∈ [1.5, 14.5]):
+  addGlassWall(-1.5, HC, -1.5, 14.5);   // Límite este del Laboratorio
+  addGlassWall(1.5, HC, 1.5, 14.5);    // Límite oeste de Descanso
+  addGlassWall(13.5, HC, 13.5, 14.5);   // Entre Descanso y Data Center
 
   // =========================================================================
-  // PASILLO CENTRAL (cruz) CON EL LOGO DE LA EMPRESA EN EL SUELO
+  // PASILLO CENTRAL (Horizontal y conexión vertical) CON EL LOGO
   // =========================================================================
   const corridorMat = trackMat(
     new THREE.MeshStandardMaterial({
@@ -443,15 +489,16 @@ export function buildColmenaOffice(
       polygonOffsetUnits: -1,
     })
   );
+  const corridorH = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(FULL_W, CORRIDOR_W)), corridorMat);
+  corridorH.rotation.x = -Math.PI / 2;
+  corridorH.position.set(-1.5, 0.012, 0);
+  corridorH.receiveShadow = true;
+
   const corridorV = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(CORRIDOR_W, FULL_D)), corridorMat);
   corridorV.rotation.x = -Math.PI / 2;
   corridorV.position.set(0, 0.012, 0);
   corridorV.receiveShadow = true;
-  const corridorH = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(FULL_W + 1.5, CORRIDOR_W)), corridorMat);
-  corridorH.rotation.x = -Math.PI / 2;
-  corridorH.position.set(0.75, 0.012, 0);
-  corridorH.receiveShadow = true;
-  scene.add(corridorV, corridorH);
+  scene.add(corridorH, corridorV);
 
   const logoCanvas = document.createElement('canvas');
   logoCanvas.width = 1024;
@@ -540,7 +587,8 @@ export function buildColmenaOffice(
 
   scene = labGroup;
   // =========================================================================
-  // LABORATORIO: ESTACIONES DE TRABAJO
+  // LABORATORIO EXPANDIDO (20 PUESTOS DE TRABAJO A MANO IZQUIERDA)
+  // Ubicado enfrente de la Oficina de Sheldon y la Oficina del CEO (cx: -15.5, cz: 7.7)
   // =========================================================================
   const labFloorTex = trackTex(createLabFloorTexture(maxAnisotropy));
   const labFloorMat = trackMat(
@@ -554,17 +602,17 @@ export function buildColmenaOffice(
     })
   );
   const labFloor = new THREE.Mesh(
-    trackGeo(new THREE.PlaneGeometry(ROOM_W, ROOM_D)),
+    trackGeo(new THREE.PlaneGeometry(LAB_EXPANDED.w, ROOM_D)),
     labFloorMat
   );
   labFloor.rotation.x = -Math.PI / 2;
-  labFloor.position.set(-9.1, 0.015, -0.2);
+  labFloor.position.set(-13.5, 0.015, -0.2);
   labFloor.receiveShadow = true;
   scene.add(labFloor);
 
   // Laboratorio border accent line
   const zoneABar = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(ROOM_W - 0.4, 0.03, 0.08)),
+    trackGeo(new THREE.BoxGeometry(LAB_EXPANDED.w - 0.4, 0.03, 0.08)),
     trackMat(
       new THREE.MeshStandardMaterial({
         color: 0x06b6d4,
@@ -574,10 +622,10 @@ export function buildColmenaOffice(
       })
     )
   );
-  zoneABar.position.set(-9.1, 0.025, 5.95);
+  zoneABar.position.set(-13.5, 0.025, 5.95);
   scene.add(zoneABar);
 
-  // Build 9 composite workstations in Laboratorio (3x3 grid matching WORKSTATION_SLOTS[0..8])
+  // Build 20 composite workstations in Laboratorio (5x4 grid matching RAW_WORKSTATION_SLOTS[0..19])
   const deskTopMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x131d31,
@@ -851,7 +899,7 @@ export function buildColmenaOffice(
     scene.add(group);
   };
 
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < RAW_WORKSTATION_SLOTS.length; i++) {
     buildWorkstation(RAW_WORKSTATION_SLOTS[i].x, RAW_WORKSTATION_SLOTS[i].z, i, i);
   }
 
@@ -867,15 +915,15 @@ export function buildColmenaOffice(
       metalness: 0.6,
     })
   );
-  // Servidores de ejecución y almacenamiento en el lateral izquierdo del laboratorio
-  const LAB_RACK_X = -14.55;
+  // Servidores de ejecución y almacenamiento en el lateral izquierdo del laboratorio expandido
+  const LAB_RACK_X = -22.5;
   const labRackZs = [-5.0, -3.65, -2.3, -0.95, 0.4, 1.75, 3.1, 4.45];
   labRackZs.forEach((rz) => buildRackAt(LAB_RACK_X, rz, Math.PI / 2, serverFaceMat, darkMetalMat));
   addSign('EJECUCIÓN', LAB_RACK_X + 0.5, 3.0, -2.975, Math.PI / 2, 4.6, '#22d3ee');
   addSign('ALMACENAMIENTO', LAB_RACK_X + 0.5, 3.0, 2.425, Math.PI / 2, 4.6, '#f59e0b');
 
   // 2 tableros grandes: entregar la tarea terminada y tomar la nueva
-  const labBoardXs = [-11.6, -6.6];
+  const labBoardXs = [-17.5, -9.5];
   const labBoardTitles = ['ENTREGAR · EN CURSO', 'TOMAR TAREA · BACKLOG'];
   const labBoardColors = ['#10b981', '#f59e0b'];
   const labBoards = labBoardXs.map((bx) => {
@@ -2682,7 +2730,7 @@ export function buildColmenaOffice(
   seniorGroup.add(seniorLight);
 
   // =========================================================================
-  // SALA DE JUNTAS: una silla por agente; todos se sientan aquí al convocar una junta
+  // SALA DE JUNTAS: al lado de la Oficina del Senior en el ala norte
   // =========================================================================
   scene = rootScene;
   const BR = BOARDROOM;
@@ -2690,14 +2738,14 @@ export function buildColmenaOffice(
   brGroup.position.set(BR.cx, 0, BR.cz);
   rootScene.add(brGroup);
   const brSlab = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(BR.w + 1.6, 0.44, BR.d + 1.4)),
+    trackGeo(new THREE.BoxGeometry(BR.w, 0.44, BR.d)),
     baseSlabMat
   );
-  brSlab.position.set(BR.cx, -0.22, BR.cz + 0.3);
+  brSlab.position.set(BR.cx, -0.22, BR.cz);
   brSlab.receiveShadow = true;
   scene.add(brSlab);
-  const brTrim = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(BR.w + 1.7, 0.06, 0.08)), trimStripMat);
-  brTrim.position.set(BR.cx, -0.02, BR.cz + BR.d / 2 + 0.9);
+  const brTrim = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(BR.w + 0.1, 0.06, 0.08)), trimStripMat);
+  brTrim.position.set(BR.cx, -0.02, BR.cz - BR.d / 2 - 0.04);
   scene.add(brTrim);
   const brFloor = new THREE.Mesh(
     trackGeo(new THREE.PlaneGeometry(BR.w, BR.d)),
@@ -2729,16 +2777,67 @@ export function buildColmenaOffice(
   );
   brBar.position.set(BR.cx, 0.025, BR.cz + BR.d / 2 - 0.25);
   scene.add(brBar);
-  // Paredes de cristal: oeste (con puerta hacia el pasillo horizontal), norte, sur y este
-  const brW = BR.cx - BR.w / 2;
-  const brE = BR.cx + BR.w / 2;
-  const brN = BR.cz - BR.d / 2;
-  const brS = BR.cz + BR.d / 2;
-  addGlassWall(brW, brN, brW, BR.cz - 1.4);
-  addGlassWall(brW, BR.cz + 1.4, brW, brS);
-  addGlassWall(brW, brN, brE, brN);
-  addGlassWall(brW, brS, brE, brS);
-  addGlassWall(brE, brN, brE, brS);
+
+  // Libreros de archivo de actas de juntas generales (pared norte/este)
+  const brBookcaseMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.2 }));
+  const brLedgerColors = [0x1e3a8a, 0x155e75, 0x0f766e, 0x334155, 0x0369a1];
+  [-4.0, 4.0].forEach((bx) => {
+    const bookcase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.6, 3.2, 0.9)), brBookcaseMat);
+    bookcase.position.set(BR.cx + bx, 1.6, BR.cz - BR.d / 2 + 0.55);
+    bookcase.castShadow = true;
+    scene.add(bookcase);
+
+    // Carpetas / libros encuadernados de "ACTAS DE JUNTA GENERAL"
+    for (let row = 0; row < 4; row++) {
+      for (let k = 0; k < 9; k++) {
+        const ledgerMat = trackMat(
+          new THREE.MeshStandardMaterial({
+            color: brLedgerColors[(row * 9 + k) % brLedgerColors.length],
+            roughness: 0.3,
+          })
+        );
+        const binder = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.32, 0.46, 0.1)), ledgerMat);
+        binder.position.set(
+          BR.cx + bx - 1.45 + k * 0.36,
+          0.65 + row * 0.72,
+          BR.cz - BR.d / 2 + 0.62
+        );
+        scene.add(binder);
+      }
+    }
+  });
+
+  // Mesa de snacks y cafetería gourmet de la Sala de Juntas (pared oeste)
+  const snackBarMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.5 }));
+  const snackCounter = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.0, 0.9, 4.8)), snackBarMat);
+  snackCounter.position.set(BR.cx - BR.w / 2 + 0.65, 0.45, BR.cz);
+  snackCounter.castShadow = true;
+  scene.add(snackCounter);
+
+  // Cafetera express profesional en la mesa de snacks
+  const coffeeMachMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.2 }));
+  const coffeeMachine = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.55, 0.58, 0.65)), coffeeMachMat);
+  coffeeMachine.position.set(BR.cx - BR.w / 2 + 0.65, 1.19, BR.cz - 1.2);
+  scene.add(coffeeMachine);
+
+  // Bandejas de snacks, frutas y termos de café
+  const trayMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.15 }));
+  [-0.2, 0.8].forEach((zOff) => {
+    const tray = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.5, 0.04, 0.7)), trayMat);
+    tray.position.set(BR.cx - BR.w / 2 + 0.65, 0.92, BR.cz + zOff);
+    scene.add(tray);
+
+    // Vasos / bocadillos
+    for (let c = 0; c < 3; c++) {
+      const cup = new THREE.Mesh(
+        trackGeo(new THREE.CylinderGeometry(0.05, 0.04, 0.12, 10)),
+        trackMat(new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 }))
+      );
+      cup.position.set(BR.cx - BR.w / 2 + 0.65, 1.0, BR.cz + zOff - 0.2 + c * 0.2);
+      scene.add(cup);
+    }
+  });
+
   // Pantalla de presentación en la pared este
   const brScreenCt = makeCanvasTex(1280, 560);
   {
@@ -2819,7 +2918,9 @@ export function buildColmenaOffice(
   setBoardroomSeats(0);
 
   // =========================================================================
-  // DATA CENTER (Ala Este, adyacente a Sala de Juntas)
+  // DATA CENTER CENTRALIZADO (Ala Sur, al frente de Sala de Juntas y al lado de Descanso)
+  // Almacena todos los servidores transferidos de Laboratorio y Senior, con UPS,
+  // clusters GPU, almacenamiento SAN y gran pantalla de métricas de infraestructura.
   // =========================================================================
   const dcGroup = new THREE.Group();
   scene.add(dcGroup);
@@ -2855,18 +2956,7 @@ export function buildColmenaOffice(
   dcVentS.position.z = DATACENTER.cz + DATACENTER.d / 2 - 0.3;
   dcGroup.add(dcVentN, dcVentS);
 
-  // Paredes de cristal del Data Center
-  const dcW = DATACENTER.cx - DATACENTER.w / 2;
-  const dcE = DATACENTER.cx + DATACENTER.w / 2;
-  const dcN = DATACENTER.cz - DATACENTER.d / 2;
-  const dcS = DATACENTER.cz + DATACENTER.d / 2;
-  addGlassWall(dcW, dcN, dcW, DATACENTER.cz - 1.2);
-  addGlassWall(dcW, DATACENTER.cz + 1.2, dcW, dcS);
-  addGlassWall(dcW, dcN, dcE, dcN);
-  addGlassWall(dcW, dcS, dcE, dcS);
-  addGlassWall(dcE, dcN, dcE, dcS);
-
-  // Filas de Racks de Servidores de 42U con LEDs frontales
+  // FILAS DE SERVIDORES CENTRALIZADOS (Servidores de Cómputo, Almacenamiento y Clusters)
   const rackTexture = createServerRackTexture(maxAnisotropy);
   disposables.push(rackTexture);
   const rackFrontMat = trackMat(
@@ -2889,8 +2979,8 @@ export function buildColmenaOffice(
   const rackMaterials = [rackSideMat, rackSideMat, rackSideMat, rackSideMat, rackFrontMat, rackSideMat];
   const rackGeo = trackGeo(new THREE.BoxGeometry(1.0, 2.6, 1.1));
 
-  // 2 pasillos de racks paralelos
-  [-2.2, 2.2].forEach((rackZOffset) => {
+  // 3 pasillos con racks de 42U para albergar toda la infraestructura del complejo
+  [-3.2, 0, 3.2].forEach((rackZOffset, rowIdx) => {
     [-4.5, -3.0, -1.5, 0, 1.5, 3.0, 4.5].forEach((rackXOffset) => {
       const rack = new THREE.Mesh(rackGeo, rackMaterials);
       rack.position.set(DATACENTER.cx + rackXOffset, 1.42, DATACENTER.cz + rackZOffset);
@@ -2899,11 +2989,11 @@ export function buildColmenaOffice(
       rack.receiveShadow = true;
       dcGroup.add(rack);
 
-      // Indicadores LED estatus en la parte superior
+      // Indicadores LED estatus
       const ledPillMat = trackMat(
         new THREE.MeshStandardMaterial({
-          color: Math.random() > 0.15 ? 0x10b981 : 0x00f0ff,
-          emissive: Math.random() > 0.15 ? 0x10b981 : 0x00f0ff,
+          color: rowIdx === 0 ? 0x10b981 : rowIdx === 1 ? 0x00f0ff : 0xf59e0b,
+          emissive: rowIdx === 0 ? 0x10b981 : rowIdx === 1 ? 0x00f0ff : 0xf59e0b,
           emissiveIntensity: 1.2,
         })
       );
@@ -2911,6 +3001,20 @@ export function buildColmenaOffice(
       ledPill.position.set(DATACENTER.cx + rackXOffset, 2.76, DATACENTER.cz + rackZOffset + (rackZOffset > 0 ? -0.52 : 0.52));
       dcGroup.add(ledPill);
     });
+  });
+
+  // BATERÍAS INDUSTRIALES / SISTEMA UPS DE RESPALDO (Pared oeste)
+  const upsCabinetMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.8, roughness: 0.3 }));
+  const upsMeterMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x22c55e, emissive: 0x22c55e, emissiveIntensity: 1.0 }));
+  [-2.5, -0.8, 0.8, 2.5].forEach((zOff) => {
+    const ups = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.9, 2.2, 1.1)), upsCabinetMat);
+    ups.position.set(DATACENTER.cx - DATACENTER.w / 2 + 0.8, 1.1, DATACENTER.cz + zOff);
+    ups.castShadow = true;
+    dcGroup.add(ups);
+
+    const meter = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.05, 0.25, 0.4)), upsMeterMat);
+    meter.position.set(DATACENTER.cx - DATACENTER.w / 2 + 1.26, 1.6, DATACENTER.cz + zOff);
+    dcGroup.add(meter);
   });
 
   // Ductos aéreos HVAC y bandejas de fibra óptica
@@ -2923,40 +3027,77 @@ export function buildColmenaOffice(
   hvacPipe.position.set(DATACENTER.cx, 3.4, DATACENTER.cz);
   dcGroup.add(hvacPipe);
 
-  // Rótulo luminoso "DATA CENTER" en pared este
-  const dcScreenCt = makeCanvasTex(1024, 400);
+  // GRAN PANTALLA GIGANTE DE MONITOREO DE INFRAESTRUCTURA Y MÉTRICAS (Pared Este)
+  const dcScreenCt = makeCanvasTex(1536, 640);
   {
     const g = dcScreenCt.ctx;
-    g.fillStyle = '#050b14';
-    g.fillRect(0, 0, 1024, 400);
+    g.fillStyle = '#030712';
+    g.fillRect(0, 0, 1536, 640);
+
+    // Barra superior
+    g.fillStyle = '#0f172a';
+    g.fillRect(0, 0, 1536, 60);
     g.fillStyle = '#00f0ff';
-    g.fillRect(0, 0, 1024, 12);
-    g.textAlign = 'center';
-    g.fillStyle = '#f8fafc';
-    g.font = 'bold 84px sans-serif';
-    g.fillText('DATA CENTER', 512, 190);
-    g.fillStyle = '#00f0ff';
-    g.font = '38px monospace';
-    g.fillText('CLUSTER GPU · 128 NODES · 99.99% UPTIME', 512, 270);
+    g.font = 'bold 30px "JetBrains Mono", monospace';
+    g.fillText('⚡ FLOWCLIC DATA CENTER · INFRAESTRUCTURA CRÍTICA & CLUSTER GPU', 30, 42);
+
+    // Paneles de métricas de Servidores, UPS y Almacenamiento
+    const metrics = [
+      { label: 'POTENCIA UPS', val: '99.4% ONLINE (N+1)', col: '#10b981' },
+      { label: 'CLUSTER GPU', val: '128 NODES · H100', col: '#38bdf8' },
+      { label: 'ALMACENAMIENTO SAN', val: '1.4 PB DISP. · NVMe', col: '#a855f7' },
+      { label: 'TEMPERATURA HVAC', val: '18.2 °C CONTROLADO', col: '#00f0ff' },
+    ];
+    metrics.forEach((m, idx) => {
+      const x = 30 + idx * 370;
+      g.fillStyle = '#0b1329';
+      g.fillRect(x, 85, 350, 120);
+      g.strokeStyle = '#1e293b';
+      g.lineWidth = 2;
+      g.strokeRect(x, 85, 350, 120);
+      g.fillStyle = '#94a3b8';
+      g.font = '18px monospace';
+      g.fillText(m.label, x + 20, 125);
+      g.fillStyle = m.col;
+      g.font = 'bold 26px monospace';
+      g.fillText(m.val, x + 20, 175);
+    });
+
+    // Gráfico de throughput de red en tiempo real
+    g.fillStyle = '#0a101f';
+    g.fillRect(30, 230, 1476, 380);
+    g.strokeStyle = '#1e293b';
+    g.strokeRect(30, 230, 1476, 380);
+    g.strokeStyle = '#00f0ff';
+    g.lineWidth = 4;
+    g.beginPath();
+    for (let i = 0; i < 45; i++) {
+      const gx = 50 + i * 32.5;
+      const gy = 480 - Math.sin(i * 0.5) * 80 - Math.cos(i * 1.1) * 45;
+      if (i === 0) g.moveTo(gx, gy);
+      else g.lineTo(gx, gy);
+    }
+    g.stroke();
+
     dcScreenCt.tex.needsUpdate = true;
   }
   const dcSign = new THREE.Mesh(
-    trackGeo(new THREE.PlaneGeometry(4.2, 1.64)),
+    trackGeo(new THREE.PlaneGeometry(6.4, 2.66)),
     trackMat(
       new THREE.MeshStandardMaterial({
         map: dcScreenCt.tex,
         emissiveMap: dcScreenCt.tex,
         emissive: 0xffffff,
-        emissiveIntensity: 0.8,
+        emissiveIntensity: 0.85,
       })
     )
   );
-  dcSign.position.set(DATACENTER.cx + DATACENTER.w / 2 - 0.12, 2.3, DATACENTER.cz);
+  dcSign.position.set(DATACENTER.cx + DATACENTER.w / 2 - 0.12, 2.4, DATACENTER.cz);
   dcSign.rotation.y = -Math.PI / 2;
   dcGroup.add(dcSign);
 
   // Iluminación fría de Data Center
-  const dcLight = new THREE.PointLight(0x00f0ff, 18, 20, 1.4);
+  const dcLight = new THREE.PointLight(0x00f0ff, 22, 22, 1.4);
   dcLight.position.set(DATACENTER.cx, 3.8, DATACENTER.cz);
   dcGroup.add(dcLight);
 
@@ -3001,16 +3142,19 @@ export function buildColmenaOffice(
   ceoRug.receiveShadow = true;
   ceoGroup.add(ceoRug);
 
-  // Paredes perimetrales y puertas de cristal hacia el pasillo
+  // Paredes perimetrales de la Oficina del CEO
+  // (Pared sur tiene la puerta abierta hacia el pasillo central horizontal z = -1.5)
   const ceoW = CEO_OFFICE.cx - CEO_OFFICE.w / 2;
   const ceoE = CEO_OFFICE.cx + CEO_OFFICE.w / 2;
   const ceoN = CEO_OFFICE.cz - CEO_OFFICE.d / 2;
   const ceoS = CEO_OFFICE.cz + CEO_OFFICE.d / 2;
-  addGlassWall(ceoE, ceoN, ceoE, CEO_OFFICE.cz - 1.5);
-  addGlassWall(ceoE, CEO_OFFICE.cz + 1.5, ceoE, ceoS);
-  addGlassWall(ceoW, ceoN, ceoE, ceoN);
-  addGlassWall(ceoW, ceoS, ceoE, ceoS);
-  addGlassWall(ceoW, ceoN, ceoW, ceoS);
+  addGlassWall(ceoW, ceoN, ceoE, ceoN); // Pared norte
+  addGlassWall(ceoW, ceoN, ceoW, ceoS); // Pared oeste
+  // Pared este linda con la oficina de Sheldon (-15.5)
+  addGlassWall(ceoE, ceoN, ceoE, ceoS);
+  // Pared sur con puerta hacia el pasillo
+  addGlassWall(ceoW, ceoS, CEO_OFFICE.cx - 1.3, ceoS);
+  addGlassWall(CEO_OFFICE.cx + 1.3, ceoS, ceoE, ceoS);
 
   // Escritorio del CEO: 2 VECES MÁS GRANDE que los de Sheldon y Leonard (4.4m x 2.0m)
   const deskMat = trackMat(
@@ -3150,26 +3294,26 @@ export function buildColmenaOffice(
   // Libreros grandes de caoba con libros encuadernados
   const bookcaseMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x331c12, roughness: 0.35 }));
   const bookColors = [0x991b1b, 0x1e3a8a, 0x14532d, 0x78350f, 0x312e81];
-  [-8.0, 8.0].forEach((zPos) => {
-    const bookcase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.2, 3.4, 4.2)), bookcaseMat);
-    bookcase.position.set(CEO_OFFICE.cx - 6.8, 1.8, CEO_OFFICE.cz + zPos);
+  [-3.8, 3.8].forEach((zPos) => {
+    const bookcase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.2, 3.2, 3.2)), bookcaseMat);
+    bookcase.position.set(CEO_OFFICE.cx - 6.8, 1.6, CEO_OFFICE.cz + zPos);
     bookcase.castShadow = true;
     ceoGroup.add(bookcase);
 
     // Baldas con libros
     for (let row = 0; row < 4; row++) {
-      for (let b = 0; b < 9; b++) {
+      for (let b = 0; b < 7; b++) {
         const bMat = trackMat(
           new THREE.MeshStandardMaterial({
-            color: bookColors[(row * 9 + b) % bookColors.length],
+            color: bookColors[(row * 7 + b) % bookColors.length],
             roughness: 0.4,
           })
         );
         const book = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.35, 0.38, 0.09)), bMat);
         book.position.set(
           CEO_OFFICE.cx - 6.4,
-          0.7 + row * 0.72,
-          CEO_OFFICE.cz + zPos - 1.5 + b * 0.38
+          0.6 + row * 0.65,
+          CEO_OFFICE.cz + zPos - 1.1 + b * 0.36
         );
         ceoGroup.add(book);
       }
@@ -3221,7 +3365,7 @@ export function buildColmenaOffice(
   spinners.push(aiHoloCube);
   ceoGroup.add(aiHoloCube);
 
-  // Gran Sofá Seccional de Cuero en el Área Lounge del Despacho (Zona Sur del despacho)
+  // Gran Sofá Seccional de Cuero en el Área Lounge del Despacho
   const sofaLeatherMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x1f2937,
@@ -3233,13 +3377,13 @@ export function buildColmenaOffice(
     trackGeo(new THREE.BoxGeometry(4.8, 0.48, 1.3)),
     sofaLeatherMat
   );
-  ceoSoofa.position.set(CEO_OFFICE.cx + 2.0, 0.42, CEO_OFFICE.cz + 8.8);
+  ceoSoofa.position.set(CEO_OFFICE.cx + 2.0, 0.42, CEO_OFFICE.cz + 4.2);
   ceoSoofa.castShadow = true;
   const ceoSoofaBack = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(4.8, 0.62, 0.32)),
     sofaLeatherMat
   );
-  ceoSoofaBack.position.set(CEO_OFFICE.cx + 2.0, 0.9, CEO_OFFICE.cz + 9.35);
+  ceoSoofaBack.position.set(CEO_OFFICE.cx + 2.0, 0.9, CEO_OFFICE.cz + 4.75);
   ceoGroup.add(ceoSoofa, ceoSoofaBack);
 
   // Mesa de centro baja de mármol negro frente al sofá
@@ -3254,7 +3398,7 @@ export function buildColmenaOffice(
     trackGeo(new THREE.BoxGeometry(3.2, 0.08, 1.1)),
     marbleMat
   );
-  marbleTable.position.set(CEO_OFFICE.cx + 2.0, 0.38, CEO_OFFICE.cz + 7.2);
+  marbleTable.position.set(CEO_OFFICE.cx + 2.0, 0.38, CEO_OFFICE.cz + 2.6);
   ceoGroup.add(marbleTable);
 
   // Rótulo "OFICINA DEL CEO" en la pared del despacho
@@ -3285,8 +3429,7 @@ export function buildColmenaOffice(
       })
     )
   );
-  ceoSign.position.set(CEO_OFFICE.cx - CEO_OFFICE.w / 2 + 0.12, 3.2, CEO_OFFICE.cz);
-  ceoSign.rotation.y = Math.PI / 2;
+  ceoSign.position.set(CEO_OFFICE.cx, 3.2, CEO_OFFICE.cz - CEO_OFFICE.d / 2 + 0.14);
   ceoGroup.add(ceoSign);
 
   // Iluminación cálida y lujosa de la Oficina del CEO
