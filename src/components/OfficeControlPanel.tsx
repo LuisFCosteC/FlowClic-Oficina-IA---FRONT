@@ -23,6 +23,8 @@ export type CameraPresetKey =
   | 'overview'
   | 'laboratorio'
   | 'oficina_sheldon'
+  | 'oficina_senior'
+  | 'sala_juntas'
   | 'zona_descanso';
 
 interface StatusSummaryDto {
@@ -466,6 +468,28 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
               }`}
             >
               Oficina Sheldon
+            </button>
+            <button
+              type="button"
+              onClick={() => onFlyToPreset('oficina_senior')}
+              className={`rounded-xl px-2 py-1.5 text-[11px] font-medium transition-all ${
+                activePreset === 'oficina_senior'
+                  ? 'border border-cyan-500/50 bg-cyan-500/20 text-cyan-200 shadow-sm'
+                  : 'border border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              Oficina Senior
+            </button>
+            <button
+              type="button"
+              onClick={() => onFlyToPreset('sala_juntas')}
+              className={`rounded-xl px-2 py-1.5 text-[11px] font-medium transition-all ${
+                activePreset === 'sala_juntas'
+                  ? 'border border-cyan-500/50 bg-cyan-500/20 text-cyan-200 shadow-sm'
+                  : 'border border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              Sala de juntas
             </button>
             <button
               type="button"

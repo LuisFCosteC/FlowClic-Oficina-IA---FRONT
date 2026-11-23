@@ -482,3 +482,104 @@ export function createContactShadowTexture(): THREE.CanvasTexture {
   tex.needsUpdate = true;
   return tex;
 }
+
+
+export function createGamingScreenTexture(
+  maxAnisotropy: number,
+  theme: 'racing' | 'adventure' | 'space' = 'racing'
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 288;
+  const ctx = canvas.getContext('2d')!;
+
+  if (theme === 'racing') {
+    // Retro synthwave racing game
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, 160);
+    skyGrad.addColorStop(0, '#312e81');
+    skyGrad.addColorStop(0.5, '#db2777');
+    skyGrad.addColorStop(1, '#f59e0b');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, 512, 160);
+
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(256, 120, 44, Math.PI, 0, false);
+    ctx.fill();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.moveTo(0, 288);
+    ctx.lineTo(210, 160);
+    ctx.lineTo(302, 160);
+    ctx.lineTo(512, 288);
+    ctx.fill();
+
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(256, 160);
+    ctx.lineTo(256, 288);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText('SPEED: 260 KM/H', 24, 38);
+    ctx.fillText('POS: 1 / 12', 340, 38);
+    ctx.fillStyle = '#10b981';
+    ctx.fillText('LAP 3/3', 24, 68);
+  } else if (theme === 'adventure') {
+    // Platformer adventure game
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, 288);
+    bgGrad.addColorStop(0, '#042f2e');
+    bgGrad.addColorStop(0.6, '#0f766e');
+    bgGrad.addColorStop(1, '#115e59');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, 512, 288);
+
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(60, 180, 140, 24);
+    ctx.fillRect(260, 140, 160, 24);
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(60, 176, 140, 6);
+    ctx.fillRect(260, 136, 160, 6);
+
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 22px monospace';
+    ctx.fillText('★ COINS: 99', 24, 38);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillText('❤ ❤ ❤', 390, 38);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '16px monospace';
+    ctx.fillText('STAGE 4 - BOSS FIGHT', 24, 68);
+  } else {
+    // Space combat simulator
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(0, 0, 512, 288);
+
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 40; i++) {
+      const sx = (i * 37) % 512;
+      const sy = (i * 59) % 288;
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+
+    ctx.strokeStyle = '#a855f7';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(216, 104, 80, 80);
+    ctx.beginPath();
+    ctx.arc(256, 144, 28, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#06b6d4';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText('SHIELD: 100%', 24, 38);
+    ctx.fillStyle = '#f43f5e';
+    ctx.fillText('TARGET LOCKED', 310, 38);
+    ctx.fillStyle = '#a855f7';
+    ctx.font = '16px monospace';
+    ctx.fillText('SCORE: 58,400', 24, 68);
+  }
+
+  return finalizeColorTexture(canvas, maxAnisotropy);
+}

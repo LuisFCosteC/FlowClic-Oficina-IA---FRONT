@@ -460,6 +460,7 @@ export default function App() {
                 >
                   <Colmena3DView
                     agents={agents}
+                    tasks={tasks}
                     onChangeAgentStatus={handleChangeAgentStatus}
                   />
                   {noAgents && renderEmpty('colmena3d', true)}

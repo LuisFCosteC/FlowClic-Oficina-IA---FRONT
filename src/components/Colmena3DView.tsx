@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { Agent, AgentStatus } from '../types/orbis';
+import { Agent, AgentStatus, KanbanTask } from '../types/orbis';
 import { OfficeControlPanel, CameraPresetKey } from './OfficeControlPanel';
-import { MODEL_TIER_META, STATUS_META, isResting } from '../data/initialData';
+import { MODEL_TIER_META, STATUS_META, TASK_STAGE_META, isResting } from '../data/initialData';
 import {
   AvatarRig,
   createAvatarRig,
@@ -12,10 +12,21 @@ import {
   updateAvatarAnimation,
 } from './three/avatarBuilder';
 import {
+  BoardProject,
+  boardroomSeats,
+  BuiltOfficeScene,
   buildColmenaOffice,
+  CORRIDOR_W,
+  DOORS,
+  labTaskSwapPath,
   LOUNGE_SLOTS,
   REVIEW_SLOTS,
-  SHELDON_CTO_SLOT,
+  SENIOR_DESK_SLOT,
+  SENIOR_POUF_SLOT,
+  SHELDON_BOARD_SLOT,
+  SHELDON_DESK_SLOT,
+  SHELDON_SOFA_SLOT,
+  sheldonDetour,
   WORKSTATION_SLOTS,
   ZONE_LABEL_ANCHORS,
   ZoneSlot,
@@ -24,6 +35,7 @@ import { createContactShadowTexture } from './three/proceduralTextures';
 
 interface Colmena3DViewProps {
   agents: Agent[];
+  tasks?: KanbanTask[];
   onChangeAgentStatus: (agentId: string, status: AgentStatus) => void;
   onCreateAgent?: () => void;
 }
@@ -36,23 +48,33 @@ const CAMERA_PRESETS: Record<
 > = {
   overview: {
     label: 'Vista General',
-    pos: [0.2, 16.5, 22.0],
-    target: [0.2, 0.6, -0.8],
+    pos: [8, 44, 38],
+    target: [8, 0, 0],
   },
   laboratorio: {
     label: 'Laboratorio',
-    pos: [-9.2, 10.5, 12.2],
-    target: [-8.9, 0.8, 0.2],
+    pos: [-7.5, 13.5, 20.5],
+    target: [-7.5, 0.8, 7.7],
   },
   oficina_sheldon: {
     label: 'Oficina de Sheldon',
-    pos: [0.2, 8.8, 10.6],
-    target: [0.2, 1.1, -2.5],
+    pos: [-7.5, 13.5, 4.5],
+    target: [-7.5, 0.8, -7.7],
+  },
+  oficina_senior: {
+    label: 'Oficina del Senior',
+    pos: [7.5, 13.5, 4.5],
+    target: [7.5, 0.8, -7.7],
+  },
+  sala_juntas: {
+    label: 'Sala de juntas',
+    pos: [21.5, 14, 12],
+    target: [21.5, 0.8, 0],
   },
   zona_descanso: {
     label: 'Zona de descanso',
-    pos: [9.4, 10.2, 12.8],
-    target: [9.0, 0.8, 0.2],
+    pos: [7.5, 13.5, 20.5],
+    target: [7.5, 0.8, 7.7],
   },
 };
 
@@ -60,6 +82,9 @@ const CAMERA_PRESETS: Record<
 const _projVec = new THREE.Vector3();
 const _deltaVec = new THREE.Vector3();
 const _mouseNdc = new THREE.Vector2();
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _mv = new THREE.Vector3();
 
 function shortestAngleDiff(current: number, target: number): number {
   let diff = (target - current + Math.PI) % (Math.PI * 2);
@@ -67,70 +92,109 @@ function shortestAngleDiff(current: number, target: number): number {
   return diff - Math.PI;
 }
 
-function getZoneIndex(x: number): number {
-  if (x < -3.7) return 0; // Laboratorio
-  if (x > 4.1) return 2; // Zona de descanso
-  return 1; // Oficina de Sheldon
+type RoomKey = 'sheldon' | 'senior' | 'laboratorio' | 'descanso' | 'junta';
+
+/** Oficina en la que está un punto, o null si está en el pasillo en cruz. */
+function getRoom(x: number, z: number): RoomKey | null {
+  const hc = CORRIDOR_W / 2;
+  if (x > 14.2) return 'junta';
+  if (Math.abs(x) < hc || Math.abs(z) < hc) return null;
+  if (z < 0) return x < 0 ? 'sheldon' : 'senior';
+  return x < 0 ? 'laboratorio' : 'descanso';
 }
 
 function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
-  const fromZone = getZoneIndex(from.x);
-  const toZone = getZoneIndex(to.x);
+  const toRoom = getRoom(to.x, to.z);
+  const fromRoom = getRoom(from.x, from.z);
   const points: THREE.Vector3[] = [];
+  const push = (x: number, z: number) => {
+    const last = points[points.length - 1];
+    if (last && Math.abs(last.x - x) < 0.01 && Math.abs(last.z - z) < 0.01) return;
+    points.push(new THREE.Vector3(x, 0, z));
+  };
 
-  if (fromZone !== toZone) {
-    // Pass cleanly through open doorways (z = 2.0)
-    const corridorZ = 2.0;
-    if (fromZone === 0 && toZone === 1) {
-      points.push(new THREE.Vector3(-4.5, 0, corridorZ));
-      points.push(new THREE.Vector3(-2.6, 0, corridorZ));
-    } else if (fromZone === 1 && toZone === 0) {
-      points.push(new THREE.Vector3(-2.6, 0, corridorZ));
-      points.push(new THREE.Vector3(-4.5, 0, corridorZ));
-    } else if (fromZone === 1 && toZone === 2) {
-      points.push(new THREE.Vector3(3.1, 0, corridorZ));
-      points.push(new THREE.Vector3(5.0, 0, corridorZ));
-    } else if (fromZone === 2 && toZone === 1) {
-      points.push(new THREE.Vector3(5.0, 0, corridorZ));
-      points.push(new THREE.Vector3(3.1, 0, corridorZ));
-    } else if (fromZone === 0 && toZone === 2) {
-      points.push(new THREE.Vector3(-4.5, 0, corridorZ));
-      points.push(new THREE.Vector3(0.2, 0, corridorZ + 0.6));
-      points.push(new THREE.Vector3(5.0, 0, corridorZ));
-    } else if (fromZone === 2 && toZone === 0) {
-      points.push(new THREE.Vector3(5.0, 0, corridorZ));
-      points.push(new THREE.Vector3(0.2, 0, corridorZ + 0.6));
-      points.push(new THREE.Vector3(-4.5, 0, corridorZ));
+  if (toRoom && fromRoom !== toRoom) {
+    // Salir de donde está
+    if (fromRoom === 'junta') {
+      push(16, 0);
+      push(13, 0);
+    } else if (fromRoom) {
+      const doorFrom = DOORS[fromRoom];
+      push(doorFrom.x, doorFrom.z + Math.sign(from.z) * 1.4); // dentro, junto a la puerta
+      push(doorFrom.x, 0); // al pasillo
+    } else if (Math.abs(from.z) >= CORRIDOR_W / 2) {
+      push(from.x, 0); // desde el pasillo vertical al cruce
     }
+    // Entrar a la oficina de destino
+    if (toRoom === 'junta') {
+      push(13, 0);
+      push(16, 0);
+    } else {
+      const doorTo = DOORS[toRoom];
+      push(doorTo.x, 0);
+      push(doorTo.x, doorTo.z + Math.sign(to.z) * 1.4);
+    }
+  }
+
+  if (toRoom === 'sheldon') {
+    const prev = points[points.length - 1] ?? from;
+    sheldonDetour(prev, to).forEach((d) => push(d.x, d.z));
   }
 
   points.push(to.clone());
   return points;
 }
 
-function assignZoneSlots(agents: Agent[]): Map<string, ZoneSlot> {
+const isSenior = (a: Agent) => !a.isCTO && /full.?stack/i.test(a.title ?? '');
+/** Agentes con puesto fijo en el laboratorio (todos menos el CTO y el Senior), en orden. */
+const labDeskAgents = (agents: Agent[]) => agents.filter((a) => !a.isCTO && !isSenior(a));
+
+function assignZoneSlots(agents: Agent[], meeting = false): Map<string, ZoneSlot> {
   const map = new Map<string, ZoneSlot>();
-  let workIdx = 0;
+
+  if (meeting) {
+    // Junta: el CTO en la cabecera y el resto en sus sillas
+    const seats = boardroomSeats(agents.length);
+    [...agents]
+      .sort((x, y) => Number(!!y.isCTO) - Number(!!x.isCTO))
+      .forEach((agent, i) => map.set(agent.id, seats[i]));
+    return map;
+  }
+
+  const owners = labDeskAgents(agents);
   let reviewIdx = 0;
   let loungeIdx = 0;
 
   agents.forEach((agent) => {
-    // BLOCKED espera en la zona de revisión; SLEEP_QUOTA descansa en el apartamento (lounge).
+    // BLOCKED espera en la zona de revisión; SLEEP_QUOTA descansa (lounge / puf / sofá).
     const inReview = agent.status === 'waiting_sheldon' || agent.status === 'blocked';
-    if (agent.isCTO && inReview) {
-      map.set(agent.id, SHELDON_CTO_SLOT);
+    if (agent.isCTO) {
+      // Trabaja sentado en su escritorio, revisa de pie frente a los tableros, descansa en el sofá.
+      map.set(
+        agent.id,
+        agent.status === 'working'
+          ? SHELDON_DESK_SLOT
+          : inReview
+            ? SHELDON_BOARD_SLOT
+            : SHELDON_SOFA_SLOT
+      );
+      return;
+    }
+    if (isSenior(agent) && !inReview) {
+      map.set(agent.id, agent.status === 'working' ? SENIOR_DESK_SLOT : SENIOR_POUF_SLOT);
       return;
     }
 
     if (agent.status === 'working') {
-      const base = WORKSTATION_SLOTS[workIdx % WORKSTATION_SLOTS.length];
-      const overflow = Math.floor(workIdx / WORKSTATION_SLOTS.length);
+      // Cada agente tiene su puesto fijo en el laboratorio
+      const idx = owners.indexOf(agent);
+      const base = WORKSTATION_SLOTS[idx % WORKSTATION_SLOTS.length];
+      const overflow = Math.floor(idx / WORKSTATION_SLOTS.length);
       map.set(agent.id, {
         x: base.x + overflow * 0.65,
         z: base.z + overflow * 0.55,
         yaw: base.yaw,
       });
-      workIdx++;
     } else if (inReview) {
       const base = REVIEW_SLOTS[reviewIdx % REVIEW_SLOTS.length];
       const overflow = Math.floor(reviewIdx / REVIEW_SLOTS.length);
@@ -157,6 +221,7 @@ function assignZoneSlots(agents: Agent[]): Map<string, ZoneSlot> {
 
 export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
   agents,
+  tasks = [],
   onChangeAgentStatus,
   onCreateAgent,
 }) => {
@@ -168,6 +233,11 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
   const [activePreset, setActivePreset] = useState<CameraPresetKey>('overview');
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState<boolean>(false);
   const [webglLost, setWebglLost] = useState<boolean>(false);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [meeting, setMeeting] = useState<boolean>(false);
+  const lastTaskRef = useRef<Map<string, string>>(new Map());
+  const keysRef = useRef<Set<string>>(new Set());
+  const officeRef = useRef<BuiltOfficeScene | null>(null);
 
   // Mutable refs for Three.js loop to stay decoupled from React renders
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -213,6 +283,33 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Teclas de movimiento de cámara
+  useEffect(() => {
+    const moveKeys = new Set(['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
+    const typing = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+    const down = (e: KeyboardEvent) => {
+      if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (moveKeys.has(k)) {
+        keysRef.current.add(k);
+        e.preventDefault();
+      } else if (k === 'shift') keysRef.current.add('shift');
+    };
+    const up = (e: KeyboardEvent) => keysRef.current.delete(e.key.toLowerCase());
+    const clear = () => keysRef.current.clear();
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', clear);
+    };
+  }, []);
+
   // Main WebGL initialization (runs once)
   useEffect(() => {
     const container = canvasMountRef.current;
@@ -237,7 +334,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     scene.fog = new THREE.FogExp2(0x060a12, 0.014);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.2, 120);
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.2, 160);
     camera.position.set(...CAMERA_PRESETS.overview.pos);
 
     const renderer = new THREE.WebGLRenderer({
@@ -274,10 +371,13 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     controls.enableDamping = !isSoftwareGl;
     controls.dampingFactor = 0.07;
     controls.target.set(...CAMERA_PRESETS.overview.target);
-    controls.minDistance = 7;
-    controls.maxDistance = 38;
-    controls.maxPolarAngle = Math.PI / 2.12;
-    controls.minPolarAngle = 0.22;
+    controls.minDistance = 2.5;
+    controls.maxDistance = 70;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.zoomToCursor = true;
+    controls.screenSpacePanning = true;
+    controls.panSpeed = 1.3;
+    controls.minPolarAngle = 0.05;
     controls.update();
 
     // Cancel camera preset flight immediately when user interacts
@@ -289,6 +389,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     // Build 3-zone Tech Office diorama
     const maxAniso = renderer.capabilities.getMaxAnisotropy();
     const builtOffice = buildColmenaOffice(scene, maxAniso, isSoftwareGl);
+    officeRef.current = builtOffice;
 
     // Shared contact shadow texture for avatars
     const contactShadowTex = createContactShadowTexture();
@@ -319,6 +420,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     // Raycaster on Layer 1 for avatar clicking
     const raycaster = new THREE.Raycaster();
     raycaster.layers.set(1);
+    const pickRay = new THREE.Raycaster();
 
     let pointerDownX = 0;
     let pointerDownY = 0;
@@ -341,6 +443,14 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
       if (hits.length > 0) {
         const hitId = hits[0].object.userData.agentId as string | undefined;
         if (hitId) setSelectedAgentId(hitId);
+        return;
+      }
+      // Sin avatar: ¿tablero o libro de proyecto?
+      pickRay.setFromCamera(_mouseNdc, camera);
+      const pickHits = pickRay.intersectObjects(builtOffice.getPickables(), false);
+      if (pickHits.length > 0) {
+        const name = builtOffice.resolvePick(pickHits[0]);
+        if (name) setSelectedProject(name);
       }
     };
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -478,6 +588,33 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         }
       }
 
+      // Movimiento libre con el teclado: WASD / flechas, Q/E bajar/subir, Shift = rápido
+      const keys = keysRef.current;
+      if (keys.size > 0) {
+        camera.getWorldDirection(_fwd);
+        _fwd.y = 0;
+        if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
+        _right.crossVectors(_fwd, camera.up).normalize();
+        _mv.set(0, 0, 0);
+        if (keys.has('w') || keys.has('arrowup')) _mv.add(_fwd);
+        if (keys.has('s') || keys.has('arrowdown')) _mv.sub(_fwd);
+        if (keys.has('d') || keys.has('arrowright')) _mv.add(_right);
+        if (keys.has('a') || keys.has('arrowleft')) _mv.sub(_right);
+        if (keys.has('e')) _mv.y += 1;
+        if (keys.has('q')) _mv.y -= 1;
+        if (_mv.lengthSq() > 0) {
+          _mv.normalize().multiplyScalar((keys.has('shift') ? 18 : 9) * dt);
+          camera.position.add(_mv);
+          controls.target.add(_mv);
+          const cx = THREE.MathUtils.clamp(controls.target.x, -17, 34);
+          const cz = THREE.MathUtils.clamp(controls.target.z, -17, 17);
+          const cy = THREE.MathUtils.clamp(controls.target.y, 0, 6);
+          camera.position.add(_deltaVec.set(cx - controls.target.x, cy - controls.target.y, cz - controls.target.z));
+          controls.target.set(cx, cy, cz);
+          cameraFlightRef.current.active = false;
+        }
+      }
+
       controls.update();
 
       // Subtle diorama ambient motion (DNA helix & holographic architecture orb)
@@ -485,6 +622,9 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
       builtOffice.holoOrb.rotation.y = elapsed * 0.7;
       builtOffice.holoOrb.rotation.x = Math.sin(elapsed * 0.5) * 0.25;
       builtOffice.holoOrb.position.y = 1.48 + Math.sin(elapsed * 1.8) * 0.06;
+      builtOffice.spinners.forEach((o, i) => {
+        o.rotation.y = elapsed * 0.5 + i;
+      });
 
       // Move and animate all avatars smoothly between zones
       let rigIndex = 0;
@@ -552,6 +692,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         'webglcontextrestored',
         onContextRestored
       );
+      officeRef.current = null;
       builtOffice.dispose();
       contactShadowTex.dispose();
       envRT.dispose();
@@ -563,14 +704,75 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     };
   }, []);
 
+  // Proyectos reales (BD): los que aparecen en los tickets y los de los agentes
+  const projectInfos = useMemo(() => {
+    const map = new Map<string, { name: string; tasks: KanbanTask[]; agents: Agent[] }>();
+    const entry = (raw: string) => {
+      const name = raw.trim();
+      if (!name) return null;
+      if (!map.has(name)) map.set(name, { name, tasks: [], agents: [] });
+      return map.get(name)!;
+    };
+    tasks.forEach((t) => entry(t.project)?.tasks.push(t));
+    agents.forEach((a) => {
+      const e = entry(a.project ?? '');
+      if (e && !e.agents.includes(a)) e.agents.push(a);
+    });
+    tasks.forEach((t) => {
+      const e = map.get(t.project.trim());
+      const ag = agents.find((a) => a.id === t.assigneeId);
+      if (e && ag && !e.agents.includes(ag)) e.agents.push(ag);
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks, agents]);
+
+  useEffect(() => {
+    const list: BoardProject[] = projectInfos.map((p) => ({
+      name: p.name,
+      total: p.tasks.length,
+      done: p.tasks.filter((t) => t.stage === 'completed').length,
+    }));
+    officeRef.current?.setProjects(list);
+  }, [projectInfos]);
+
+  useEffect(() => {
+    officeRef.current?.setSelectedProject(selectedProject);
+  }, [selectedProject]);
+
+  // Puestos del laboratorio (nombre + tarea), tableros de tareas y sillas de la sala de juntas
+  useEffect(() => {
+    const owners = labDeskAgents(agents);
+    officeRef.current?.setLabDesks(
+      Array.from({ length: 9 }, (_, i) =>
+        owners[i] ? { name: owners[i].name, task: owners[i].currentTask } : null
+      )
+    );
+  }, [agents]);
+
+  useEffect(() => {
+    officeRef.current?.setLabBoards({
+      inProgress: tasks
+        .filter((t) => t.stage === 'in_dev' || t.stage === 'sheldon_review')
+        .map((t) => t.title),
+      backlog: tasks.filter((t) => t.stage === 'backlog').map((t) => t.title),
+    });
+  }, [tasks]);
+
+  useEffect(() => {
+    officeRef.current?.setBoardroomSeats(agents.length);
+  }, [agents.length]);
+
+  const activeProject = projectInfos.find((p) => p.name === selectedProject) ?? null;
+
   // Sync dynamic agent additions & status transitions into the live Three.js scene
   useEffect(() => {
     const scene = sceneRef.current;
     const shadowTex = shadowTexRef.current;
     if (!scene || !shadowTex) return;
 
-    const slots = assignZoneSlots(agents);
+    const slots = assignZoneSlots(agents, meeting);
     const rigs = rigsRef.current;
+    const owners = labDeskAgents(agents);
 
     // Agentes archivados o eliminados: se retiran de la escena.
     const liveIds = new Set(agents.map((a) => a.id));
@@ -602,6 +804,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         newRig.selectRing.visible = agent.id === selectedIdRef.current;
         scene.add(newRig.root);
         rigs.set(agent.id, newRig);
+        lastTaskRef.current.set(agent.id, agent.currentTask);
       } else {
         const targetVec = new THREE.Vector3(slot.x, 0, slot.z);
         const statusChanged = existing.currentStatus !== agent.status;
@@ -610,14 +813,32 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         if (statusChanged) {
           setAvatarStatusColor(existing, agent.status);
         }
-        if (statusChanged || posChanged) {
+        // Si cambió su tarea estando en su puesto: va a los tableros, entrega la vieja,
+        // toma la nueva y vuelve
+        const prevTask = lastTaskRef.current.get(agent.id);
+        lastTaskRef.current.set(agent.id, agent.currentTask);
+        const deskIdx = owners.indexOf(agent);
+        const swapTask =
+          !meeting &&
+          agent.status === 'working' &&
+          deskIdx >= 0 &&
+          deskIdx < 9 &&
+          prevTask !== undefined &&
+          prevTask !== agent.currentTask &&
+          !statusChanged &&
+          !posChanged;
+        if (swapTask) {
+          existing.targetPos.copy(targetVec);
+          existing.targetYaw = slot.yaw;
+          existing.waypoints = labTaskSwapPath(deskIdx).map((pt) => new THREE.Vector3(pt.x, 0, pt.z));
+        } else if (statusChanged || posChanged) {
           existing.targetPos.copy(targetVec);
           existing.targetYaw = slot.yaw;
           existing.waypoints = buildWaypoints(existing.root.position, targetVec);
         }
       }
     });
-  }, [agents]);
+  }, [agents, meeting]);
 
 
 
@@ -718,6 +939,142 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
           );
         })}
       </div>
+
+      {/* Convocar junta: todos los agentes van a la sala de juntas */}
+      <button
+        type="button"
+        onClick={() => {
+          const next = !meeting;
+          setMeeting(next);
+          if (next) flyToPreset('sala_juntas');
+        }}
+        className={`absolute left-4 top-[66px] z-20 rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-lg transition-colors ${
+          meeting
+            ? 'border-amber-400 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'
+            : 'border-cyan-500/60 bg-[#0B1B30] text-cyan-200 hover:bg-cyan-500/20'
+        }`}
+      >
+        {meeting ? 'Terminar junta' : 'Convocar junta'}
+      </button>
+
+      {meeting && (
+        <div className="absolute bottom-4 left-4 z-20 w-80 rounded-2xl border border-slate-700 bg-[#0B1220]/95 p-4 text-xs shadow-xl">
+          <div className="font-mono text-[10px] tracking-wider text-amber-400">
+            JUNTA · REPORTE DEL EQUIPO
+          </div>
+          <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+            {agents.length === 0 && <div className="text-slate-500">No hay agentes.</div>}
+            {agents.map((a) => (
+              <div key={a.id} className="rounded-lg border border-slate-800 bg-[#080E1A] px-2.5 py-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-100">
+                    {a.name}
+                    {a.isCTO && <span className="ml-1 font-mono text-[9px] text-amber-400">CTO</span>}
+                  </span>
+                  <span className="flex items-center gap-1 text-[10px]" style={{ color: STATUS_META[a.status].color }}>
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: STATUS_META[a.status].color }} />
+                    {STATUS_META[a.status].label}
+                  </span>
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-slate-400">
+                  {a.currentTask?.trim() || 'Sin tarea asignada'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute bottom-3 right-4 z-10 hidden text-[10px] text-slate-500 lg:block">
+        WASD / flechas: moverse · Q/E: bajar/subir · Shift: rápido · clic derecho: desplazar · rueda: zoom
+      </div>
+
+      {/* Información del proyecto seleccionado (clic en un tablero o en un libro), a los lados */}
+      {activeProject && (
+        <>
+          <div className="absolute left-4 top-28 z-20 w-72 rounded-2xl border border-slate-700 bg-[#0B1220]/95 p-4 text-xs shadow-xl">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-mono text-[10px] tracking-wider text-amber-400">PROYECTO</div>
+                <div className="mt-0.5 text-sm font-semibold text-slate-100">{activeProject.name}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedProject(null)}
+                className="rounded-md px-2 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                aria-label="Cerrar información del proyecto"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-3 text-slate-400">
+              Progreso:{' '}
+              <span className="font-mono text-slate-100">
+                {activeProject.tasks.filter((t) => t.stage === 'completed').length}/
+                {activeProject.tasks.length}
+              </span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-800">
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{
+                  width: `${
+                    activeProject.tasks.length
+                      ? (activeProject.tasks.filter((t) => t.stage === 'completed').length /
+                          activeProject.tasks.length) *
+                        100
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            <div className="mt-3 space-y-1">
+              {(Object.keys(TASK_STAGE_META) as Array<keyof typeof TASK_STAGE_META>).map((st) => (
+                <div key={st} className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-slate-300">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: TASK_STAGE_META[st].accent }}
+                    />
+                    {TASK_STAGE_META[st].label}
+                  </span>
+                  <span className="font-mono text-slate-100">
+                    {activeProject.tasks.filter((t) => t.stage === st).length}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div
+            className="absolute top-28 z-20 w-80 rounded-2xl border border-slate-700 bg-[#0B1220]/95 p-4 text-xs shadow-xl"
+            style={{ right: isRightPanelCollapsed ? 16 : 408 }}
+          >
+            <div className="font-mono text-[10px] tracking-wider text-cyan-400">TICKETS</div>
+            <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto">
+              {activeProject.tasks.length === 0 && (
+                <div className="text-slate-500">Este proyecto aún no tiene tickets.</div>
+              )}
+              {activeProject.tasks.map((t) => (
+                <div key={t.id} className="rounded-lg border border-slate-800 bg-[#080E1A] px-2.5 py-1.5">
+                  <div className="truncate font-medium text-slate-100">{t.title}</div>
+                  <div className="mt-0.5 flex items-center justify-between text-[10px] text-slate-400">
+                    <span style={{ color: TASK_STAGE_META[t.stage].accent }}>
+                      {t.returned ? 'Devuelta' : TASK_STAGE_META[t.stage].shortLabel}
+                    </span>
+                    <span>{agents.find((a) => a.id === t.assigneeId)?.name ?? 'Sin asignar'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 font-mono text-[10px] tracking-wider text-cyan-400">EQUIPO</div>
+            <div className="mt-1 text-slate-300">
+              {activeProject.agents.length
+                ? activeProject.agents.map((a) => a.name).join(', ')
+                : 'Sin agentes asignados'}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Minimal Top-Left Scene Telemetry Summary (compact, non-occluding, no backdrop-blur) */}
       <div className="pointer-events-none absolute left-4 top-4 z-20 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-slate-800/90 bg-[#0B1220]/95 px-4 py-2 text-xs shadow-lg">
