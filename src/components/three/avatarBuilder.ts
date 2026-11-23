@@ -12,6 +12,7 @@ export interface AvatarRig {
   headGroup: THREE.Group;
   statusRingMat: THREE.MeshStandardMaterial;
   selectRing: THREE.Mesh;
+  batteryIcon: THREE.Group;
   hitProxy: THREE.Mesh;
   currentStatus: AgentStatus;
   waypoints: THREE.Vector3[];
@@ -287,6 +288,41 @@ export function createAvatarRig(
     headGroup.add(puff);
   }
 
+  // Battery status icon (procedural low-battery indicator for SLEEP_QUOTA)
+  const batteryIcon = new THREE.Group();
+  batteryIcon.position.set(0, 2.02, 0);
+
+  const batteryFrameMat = new THREE.MeshStandardMaterial({
+    color: 0x475569,
+    roughness: 0.3,
+    metalness: 0.7,
+  });
+  const batteryFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(0.24, 0.12, 0.05),
+    batteryFrameMat
+  );
+  const batteryTerminal = new THREE.Mesh(
+    new THREE.BoxGeometry(0.025, 0.06, 0.03),
+    batteryFrameMat
+  );
+  batteryTerminal.position.set(0.13, 0, 0);
+
+  const batteryLowLevelMat = new THREE.MeshStandardMaterial({
+    color: 0xef4444,
+    emissive: 0xef4444,
+    emissiveIntensity: 0.95,
+    roughness: 0.2,
+  });
+  const batteryBar = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.08, 0.04),
+    batteryLowLevelMat
+  );
+  batteryBar.position.set(-0.065, 0, 0);
+
+  batteryIcon.add(batteryFrame, batteryTerminal, batteryBar);
+  batteryIcon.visible = agent.status === 'sleep_quota';
+  root.add(batteryIcon);
+
   // Invisible hit proxy for smooth raycasting (Layer 1)
   const hitProxy = new THREE.Mesh(
     new THREE.CylinderGeometry(0.45, 0.45, 1.75, 10),
@@ -308,6 +344,7 @@ export function createAvatarRig(
     headGroup,
     statusRingMat,
     selectRing,
+    batteryIcon,
     hitProxy,
     currentStatus: agent.status,
     waypoints: [],
@@ -321,6 +358,7 @@ export function setAvatarStatusColor(rig: AvatarRig, status: AgentStatus): void 
   const hex = STATUS_HEX[status];
   rig.statusRingMat.color.setHex(hex);
   rig.statusRingMat.emissive.setHex(hex);
+  rig.batteryIcon.visible = status === 'sleep_quota';
   rig.currentStatus = status;
 }
 

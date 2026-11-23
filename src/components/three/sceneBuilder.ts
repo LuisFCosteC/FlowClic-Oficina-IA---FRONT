@@ -1020,16 +1020,17 @@ export function buildColmenaOffice(
   scene.add(tape1, tape2);
 
   // =========================================================================
-  // ZONA DE DESCANSO: SALA DE DESCANSO Y REPOSO
+  // ZONA DE DESCANSO: CAFETERÍA LOUNGE MODERNA (V3D06)
   // =========================================================================
+  // Suelo de parquet nórdico claro
   const woodTex = trackTex(createWoodFloorTexture(maxAnisotropy));
   const woodFloor = new THREE.Mesh(
     trackGeo(new THREE.PlaneGeometry(10.4, 14.4)),
     trackMat(
       new THREE.MeshStandardMaterial({
         map: woodTex,
-        roughness: 0.62,
-        metalness: 0.06,
+        roughness: 0.55,
+        metalness: 0.04,
         polygonOffset: true,
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -1,
@@ -1041,14 +1042,14 @@ export function buildColmenaOffice(
   woodFloor.receiveShadow = true;
   scene.add(woodFloor);
 
-  // Zona de descanso warm amber border line
+  // Línea divisoria luminosa ámbar cálida
   const zoneCBar = new THREE.Mesh(
     trackGeo(new THREE.BoxGeometry(9.8, 0.03, 0.08)),
     trackMat(
       new THREE.MeshStandardMaterial({
         color: 0xfb923c,
         emissive: 0xfb923c,
-        emissiveIntensity: 0.75,
+        emissiveIntensity: 0.65,
         roughness: 0.35,
       })
     )
@@ -1056,321 +1057,396 @@ export function buildColmenaOffice(
   zoneCBar.position.set(9.45, 0.03, 6.85);
   scene.add(zoneCBar);
 
-  // Patterned living room rug
-  const rugTex = trackTex(createBbtRugTexture(maxAnisotropy));
-  const rug = new THREE.Mesh(
-    trackGeo(new THREE.PlaneGeometry(5.6, 4.1)),
+  // Alfombra circular central de tejido suave para el lounge
+  const loungeRug = new THREE.Mesh(
+    trackGeo(new THREE.CircleGeometry(3.1, 32)),
     trackMat(
       new THREE.MeshStandardMaterial({
-        map: rugTex,
-        roughness: 0.92,
+        color: 0xe2e8f0,
+        roughness: 0.94,
         metalness: 0.0,
       })
     )
   );
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(8.8, 0.04, 1.4);
-  rug.receiveShadow = true;
-  scene.add(rug);
+  loungeRug.rotation.x = -Math.PI / 2;
+  loungeRug.position.set(9.8, 0.035, 1.2);
+  loungeRug.receiveShadow = true;
+  scene.add(loungeRug);
 
-  // Leather Sofa (composite 7-part couch with Sheldon's spot cushion)
-  const leatherMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x7c4328,
-      roughness: 0.56,
-      metalness: 0.08,
-    })
+  // Materiales compartidos para mobiliario lounge
+  const oakLegMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.6, metalness: 0.05 })
   );
-  const cushionAccentMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0xb45309,
-      roughness: 0.75,
-      metalness: 0.02,
-    })
+  const darkMarbleMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.25, metalness: 0.15 })
   );
-  const sofa = new THREE.Group();
-  sofa.position.set(8.8, 0, -0.6);
 
-  const zoneCSofaBase = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(4.1, 0.42, 1.2)),
-    leatherMat
-  );
-  zoneCSofaBase.position.y = 0.25;
-  zoneCSofaBase.castShadow = true;
-  sofa.add(zoneCSofaBase);
+  // -------------------------------------------------------------------------
+  // 1. PUESTO DE CAFETERÍA / COFFEE STATION PROFESIONAL
+  // -------------------------------------------------------------------------
+  const coffeeBar = new THREE.Group();
+  coffeeBar.position.set(6.6, 0, -4.8);
 
-  const zoneCSofaBack = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(4.1, 0.72, 0.28)),
-    leatherMat
-  );
-  zoneCSofaBack.position.set(0, 0.72, -0.46);
-  zoneCSofaBack.castShadow = true;
-  sofa.add(zoneCSofaBack);
-
-  [-1.92, 1.92].forEach((ax) => {
-    const arm = new THREE.Mesh(
-      trackGeo(new THREE.BoxGeometry(0.28, 0.56, 1.2)),
-      leatherMat
-    );
-    arm.position.set(ax, 0.46, 0);
-    arm.castShadow = true;
-    sofa.add(arm);
-  });
-
-  // 3 seat cushions (rightmost = Sheldon's sacred spot with subtle golden pillow!)
-  [-1.18, 0, 1.18].forEach((cx, cIdx) => {
-    const cushion = new THREE.Mesh(
-      trackGeo(new THREE.BoxGeometry(1.12, 0.16, 0.88)),
-      cIdx === 2 ? cushionAccentMat : leatherMat
-    );
-    cushion.position.set(cx, 0.52, 0.1);
-    sofa.add(cushion);
-  });
-  scene.add(sofa);
-
-  // Matching lounge armchair
-  const armchair = new THREE.Group();
-  armchair.position.set(5.9, 0, 1.8);
-  armchair.rotation.y = Math.PI * 0.42;
-  const acBase = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(1.25, 0.42, 1.15)),
-    leatherMat
-  );
-  acBase.position.y = 0.25;
-  const acBack = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(1.25, 0.68, 0.24)),
-    leatherMat
-  );
-  acBack.position.set(0, 0.68, -0.45);
-  armchair.add(acBase, acBack);
-  scene.add(armchair);
-
-  // Wooden Coffee Table with takeaway boxes & mugs
-  const woodFurnitureMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x5c3a21,
-      roughness: 0.6,
-      metalness: 0.08,
-    })
-  );
-  const zoneCCoffeeTable = new THREE.Group();
-  zoneCCoffeeTable.position.set(8.8, 0, 1.75);
-  const ctTop = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(2.3, 0.08, 1.15)),
-    woodFurnitureMat
-  );
-  ctTop.position.y = 0.46;
-  ctTop.castShadow = true;
-  zoneCCoffeeTable.add(ctTop);
-  [
-    [-1.0, -0.45],
-    [1.0, -0.45],
-    [-1.0, 0.45],
-    [1.0, 0.45],
-  ].forEach(([lx, lz]) => {
-    const leg = new THREE.Mesh(
-      trackGeo(new THREE.BoxGeometry(0.08, 0.44, 0.08)),
-      woodFurnitureMat
-    );
-    leg.position.set(lx, 0.22, lz);
-    zoneCCoffeeTable.add(leg);
-  });
-
-  // Takeout food boxes (Thai food nights)
-  const takeoutMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7 })
-  );
-  const box1 = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(0.24, 0.2, 0.24)),
-    takeoutMat
-  );
-  box1.position.set(-0.35, 0.6, 0.08);
-  const box2 = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(0.22, 0.18, 0.22)),
-    takeoutMat
-  );
-  box2.position.set(-0.05, 0.59, -0.15);
-  box2.rotation.y = 0.4;
-  const mug = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.06, 0.055, 0.14, 10)),
-    trackMat(new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.35 }))
-  );
-  mug.position.set(0.42, 0.57, 0.12);
-  zoneCCoffeeTable.add(box1, box2, mug);
-  scene.add(zoneCCoffeeTable);
-
-  // Glowing Wall / Console TV (facing the sofa)
-  const tvUnit = new THREE.Group();
-  tvUnit.position.set(8.8, 0, 5.45);
-  const consoleBox = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(3.4, 0.62, 0.72)),
+  // Mueble bajo aparador
+  const barCabinet = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(2.4, 0.92, 0.9)),
     darkMetalMat
   );
-  consoleBox.position.y = 0.31;
-  consoleBox.castShadow = true;
-  tvUnit.add(consoleBox);
+  barCabinet.position.y = 0.46;
+  barCabinet.castShadow = true;
+  coffeeBar.add(barCabinet);
 
-  const tvFrame = new THREE.Mesh(
-    trackGeo(new THREE.BoxGeometry(2.85, 1.58, 0.1)),
+  // Encimera de cuarzo blanco/mármol
+  const barTop = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(2.5, 0.06, 0.96)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 }))
+  );
+  barTop.position.y = 0.95;
+  coffeeBar.add(barTop);
+
+  // Máquina de café espresso comercial (acero pulido y negro)
+  const espressoMachine = new THREE.Group();
+  espressoMachine.position.set(-0.35, 0.98, 0);
+
+  const machineBody = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.72, 0.48, 0.52)),
+    brushedAlumMat
+  );
+  machineBody.position.y = 0.24;
+  machineBody.castShadow = true;
+  espressoMachine.add(machineBody);
+
+  // Grupo erogador doble frontal y bandeja goteo
+  const dripTray = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.68, 0.05, 0.22)),
     darkMetalMat
   );
-  tvFrame.position.set(0, 1.56, 0);
-  tvFrame.castShadow = true;
-  tvUnit.add(tvFrame);
+  dripTray.position.set(0, 0.025, 0.28);
+  espressoMachine.add(dripTray);
 
-  const tvTex = trackTex(createTvScreenTexture(maxAnisotropy));
-  const zoneCTvScreen = new THREE.Mesh(
-    trackGeo(new THREE.PlaneGeometry(2.68, 1.42)),
+  [-0.14, 0.14].forEach((gx) => {
+    const portafilter = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.045, 0.045, 0.12, 10)),
+      darkMetalMat
+    );
+    portafilter.position.set(gx, 0.22, 0.24);
+    const handle = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.015, 0.015, 0.14, 8)),
+      oakLegMat
+    );
+    handle.rotation.x = Math.PI / 2;
+    handle.position.set(gx, 0.22, 0.35);
+    espressoMachine.add(portafilter, handle);
+  });
+
+  // Tolvas de café en grano transparentes arriba
+  [-0.18, 0.18].forEach((hx) => {
+    const hopper = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.09, 0.06, 0.22, 12)),
+      trackMat(new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.3 }))
+    );
+    hopper.position.set(hx, 0.59, -0.06);
+    espressoMachine.add(hopper);
+  });
+
+  coffeeBar.add(espressoMachine);
+
+  // Molinillo de café profesional al lado
+  const grinder = new THREE.Group();
+  grinder.position.set(0.48, 0.98, -0.05);
+  const grinderBase = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.1, 0.12, 0.36, 12)),
+    darkMetalMat
+  );
+  grinderBase.position.y = 0.18;
+  const grinderHopper = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.08, 0.05, 0.18, 12)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.3 }))
+  );
+  grinderHopper.position.y = 0.44;
+  grinder.add(grinderBase, grinderHopper);
+  coffeeBar.add(grinder);
+
+  // Fila de tazas de café de colores en la barra
+  const cupColors = [0x06b6d4, 0xef4444, 0xf59e0b, 0x10b981];
+  cupColors.forEach((color, i) => {
+    const cup = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.045, 0.038, 0.08, 10)),
+      trackMat(new THREE.MeshStandardMaterial({ color, roughness: 0.2 }))
+    );
+    cup.position.set(0.2 + i * 0.18, 1.02, 0.25);
+    coffeeBar.add(cup);
+  });
+
+  // Servilletero y azucarero
+  const napkinDispenser = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.1, 0.14, 0.1)),
+    brushedAlumMat
+  );
+  napkinDispenser.position.set(-0.95, 1.05, 0.1);
+  coffeeBar.add(napkinDispenser);
+
+  scene.add(coffeeBar);
+
+  // -------------------------------------------------------------------------
+  // 2. MESA BAJA CON SNACKS
+  // -------------------------------------------------------------------------
+  const snackTable = new THREE.Group();
+  snackTable.position.set(9.8, 0, 0.3);
+
+  // Pata central y tablero circular
+  const tableBase = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.28, 0.32, 0.03, 20)),
+    darkMetalMat
+  );
+  tableBase.position.y = 0.015;
+  const tablePole = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.04, 0.04, 0.45, 12)),
+    darkMetalMat
+  );
+  tablePole.position.y = 0.24;
+  const tableTop = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.68, 0.68, 0.04, 24)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.3, metalness: 0.05 }))
+  );
+  tableTop.position.y = 0.47;
+  tableTop.castShadow = true;
+  snackTable.add(tableBase, tablePole, tableTop);
+
+  // Bandeja de aperitivos y bol de frutas
+  const tray = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.42, 0.02, 0.28)),
+    oakLegMat
+  );
+  tray.position.set(-0.12, 0.5, 0);
+  // Croissants / snacks dorados
+  const snackMat = trackMat(new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.8 }));
+  [-0.08, 0.06].forEach((sx) => {
+    const croissant = new THREE.Mesh(
+      trackGeo(new THREE.TorusGeometry(0.045, 0.022, 6, 12, Math.PI)),
+      snackMat
+    );
+    croissant.rotation.x = -Math.PI / 2;
+    croissant.position.set(-0.12 + sx, 0.525, 0);
+    snackTable.add(croissant);
+  });
+  snackTable.add(tray);
+
+  // Cuenco con manzanas
+  const fruitBowl = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.12, 0.06, 0.06, 12)),
+    darkMetalMat
+  );
+  fruitBowl.position.set(0.24, 0.52, 0.05);
+  const redApple = new THREE.Mesh(
+    trackGeo(new THREE.SphereGeometry(0.035, 8, 8)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.35 }))
+  );
+  redApple.position.set(0.23, 0.56, 0.04);
+  const greenApple = new THREE.Mesh(
+    trackGeo(new THREE.SphereGeometry(0.032, 8, 8)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.35 }))
+  );
+  greenApple.position.set(0.27, 0.555, 0.07);
+  snackTable.add(fruitBowl, redApple, greenApple);
+
+  scene.add(snackTable);
+
+  // -------------------------------------------------------------------------
+  // 3. SILLONES INDIVIDUALES MODERNOS TIPO LOUNGE (3 UNIDADES)
+  // -------------------------------------------------------------------------
+  const buildModernArmchair = (colorHex: number, x: number, z: number, yaw: number) => {
+    const chair = new THREE.Group();
+    chair.position.set(x, 0, z);
+    chair.rotation.y = yaw;
+
+    const fabricMat = trackMat(
+      new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.72, metalness: 0.04 })
+    );
+
+    // Asiento acolchado
+    const seat = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(0.78, 0.18, 0.76)),
+      fabricMat
+    );
+    seat.position.y = 0.38;
+    seat.castShadow = true;
+    chair.add(seat);
+
+    // Respaldo ergonómico inclinado
+    const back = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(0.78, 0.52, 0.14)),
+      fabricMat
+    );
+    back.position.set(0, 0.64, -0.32);
+    back.rotation.x = -0.12;
+    back.castShadow = true;
+    chair.add(back);
+
+    // Reposabrazos laterales acolchados
+    [-0.41, 0.41].forEach((ax) => {
+      const arm = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.12, 0.32, 0.68)),
+        fabricMat
+      );
+      arm.position.set(ax, 0.48, 0.02);
+      chair.add(arm);
+    });
+
+    // 4 Patas nórdicas abiertas de madera de roble
+    const legGeo = trackGeo(new THREE.CylinderGeometry(0.025, 0.018, 0.34, 8));
+    [
+      [-0.34, -0.28, 0.12, -0.1],
+      [0.34, -0.28, -0.12, -0.1],
+      [-0.34, 0.28, 0.12, 0.1],
+      [0.34, 0.28, -0.12, 0.1],
+    ].forEach(([lx, lz, tiltZ, tiltX]) => {
+      const leg = new THREE.Mesh(legGeo, oakLegMat);
+      leg.position.set(lx, 0.16, lz);
+      leg.rotation.z = tiltZ;
+      leg.rotation.x = tiltX;
+      chair.add(leg);
+    });
+
+    scene.add(chair);
+  };
+
+  buildModernArmchair(0x10b981, 8.0, 2.0, -Math.PI * 0.25); // Menta suave
+  buildModernArmchair(0x3b82f6, 9.8, 2.6, Math.PI);          // Azul nórdico
+  buildModernArmchair(0xf1f5f9, 11.6, 2.0, Math.PI * 1.25);  // Arena / lino
+
+  // -------------------------------------------------------------------------
+  // 4. PUFS CIRCULARES / OTOMANAS MODERNAS (3 UNIDADES)
+  // -------------------------------------------------------------------------
+  const buildPouf = (colorHex: number, x: number, z: number) => {
+    const pouf = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.42, 0.44, 0.36, 18)),
+      trackMat(new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.8, metalness: 0.02 }))
+    );
+    pouf.position.set(x, 0.18, z);
+    pouf.castShadow = true;
+    pouf.receiveShadow = true;
+    scene.add(pouf);
+  };
+
+  buildPouf(0xe07a5f, 8.0, -1.8);  // Terracota
+  buildPouf(0xf59e0b, 10.0, -2.0); // Mostaza
+  buildPouf(0x475569, 12.2, -0.4); // Grafito
+
+  // -------------------------------------------------------------------------
+  // 5. RINCÓN CHILL-OUT CON COJINES MULLIDOS EN EL SUELO
+  // -------------------------------------------------------------------------
+  const chillRug = new THREE.Mesh(
+    trackGeo(new THREE.CircleGeometry(1.6, 24)),
     trackMat(
       new THREE.MeshStandardMaterial({
-        map: tvTex,
-        emissiveMap: tvTex,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.9,
-        roughness: 0.15,
+        color: 0xccfbf1,
+        roughness: 0.95,
+        metalness: 0.0,
       })
     )
   );
-  zoneCTvScreen.position.set(0, 1.56, -0.058);
-  zoneCTvScreen.rotation.y = Math.PI;
-  tvUnit.add(zoneCTvScreen);
-  scene.add(tvUnit);
+  chillRug.rotation.x = -Math.PI / 2;
+  chillRug.position.set(12.0, 0.035, -4.2);
+  chillRug.receiveShadow = true;
+  scene.add(chillRug);
 
-  // Two-tier Rest Bunk Pods along back wall
-  const mattressMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      roughness: 0.85,
-      metalness: 0.02,
-    })
-  );
-  const blanketMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x1d4ed8,
-      roughness: 0.88,
-      metalness: 0.02,
-    })
-  );
-  const pillowMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0xe2e8f0,
-      roughness: 0.8,
-    })
-  );
-  const warmStripMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0xfbbf24,
-      emissive: 0xf59e0b,
-      emissiveIntensity: 1.1,
-      roughness: 0.25,
-    })
-  );
+  const cushionColors = [0x06b6d4, 0xfbbf24, 0xa78bfa, 0x34d399, 0xf472b6, 0x38bdf8];
+  [
+    [-0.45, -0.2, 0.08, 0.2],
+    [0.4, -0.25, 0.08, -0.3],
+    [0.0, -0.45, 0.09, 0.6],
+    [-0.2, 0.35, 0.08, -0.15],
+    [0.35, 0.3, 0.09, 0.4],
+    [0.05, 0.0, 0.16, 0.1], // En la cima de la pila
+  ].forEach(([cx, cz, cy, rotY], i) => {
+    const cushion = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(0.48, 0.12, 0.44)),
+      trackMat(
+        new THREE.MeshStandardMaterial({
+          color: cushionColors[i % cushionColors.length],
+          roughness: 0.75,
+          metalness: 0.03,
+        })
+      )
+    );
+    cushion.position.set(12.0 + cx, cy, -4.2 + cz);
+    cushion.rotation.y = rotY;
+    cushion.castShadow = true;
+    scene.add(cushion);
+  });
 
-  const buildRestBunk = (bx: number, bz: number) => {
-    const bunk = new THREE.Group();
-    bunk.position.set(bx, 0, bz);
+  // -------------------------------------------------------------------------
+  // 6. PLANTAS DECORATIVAS EN MACETAS CONTEMPORÁNEAS
+  // -------------------------------------------------------------------------
+  const buildIndoorPlant = (px: number, pz: number, plantHeight: number) => {
+    const pot = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.24, 0.18, 0.46, 16)),
+      trackMat(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }))
+    );
+    pot.position.set(px, 0.23, pz);
+    pot.castShadow = true;
+    scene.add(pot);
 
-    // 4 Corner posts
-    const postGeo = trackGeo(new THREE.BoxGeometry(0.11, 2.55, 0.11));
+    const trunk = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.03, 0.04, plantHeight, 8)),
+      oakLegMat
+    );
+    trunk.position.set(px, 0.46 + plantHeight / 2, pz);
+    scene.add(trunk);
+
+    const leafGeo = trackGeo(new THREE.SphereGeometry(0.26, 8, 8));
+    const leafMat = trackMat(
+      new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.6 })
+    );
     [
-      [-1.12, -0.56],
-      [1.12, -0.56],
-      [-1.12, 0.56],
-      [1.12, 0.56],
-    ].forEach(([px, pz]) => {
-      const post = new THREE.Mesh(postGeo, woodFurnitureMat);
-      post.position.set(px, 1.28, pz);
-      post.castShadow = true;
-      bunk.add(post);
+      [0, plantHeight, 0, 1.0],
+      [0.15, plantHeight * 0.8, 0.1, 0.85],
+      [-0.14, plantHeight * 0.7, -0.12, 0.8],
+      [0.12, plantHeight * 0.55, -0.15, 0.75],
+    ].forEach(([lx, ly, lz, scale]) => {
+      const cluster = new THREE.Mesh(leafGeo, leafMat);
+      cluster.scale.set(scale, scale * 0.75, scale);
+      cluster.position.set(px + lx, 0.46 + ly, pz + lz);
+      scene.add(cluster);
     });
-
-    // Lower & Upper bunks
-    [0.48, 1.62].forEach((by) => {
-      const frame = new THREE.Mesh(
-        trackGeo(new THREE.BoxGeometry(2.3, 0.12, 1.18)),
-        woodFurnitureMat
-      );
-      frame.position.y = by;
-      bunk.add(frame);
-
-      const mattress = new THREE.Mesh(
-        trackGeo(new THREE.BoxGeometry(2.14, 0.18, 1.06)),
-        mattressMat
-      );
-      mattress.position.y = by + 0.14;
-      bunk.add(mattress);
-
-      const blanket = new THREE.Mesh(
-        trackGeo(new THREE.BoxGeometry(1.42, 0.2, 1.08)),
-        blanketMat
-      );
-      blanket.position.set(0.32, by + 0.15, 0);
-      bunk.add(blanket);
-
-      const pillow = new THREE.Mesh(
-        trackGeo(new THREE.BoxGeometry(0.42, 0.12, 0.72)),
-        pillowMat
-      );
-      pillow.position.set(-0.76, by + 0.27, 0);
-      bunk.add(pillow);
-
-      // Warm reading LED strip
-      const strip = new THREE.Mesh(
-        trackGeo(new THREE.BoxGeometry(1.8, 0.035, 0.035)),
-        warmStripMat
-      );
-      strip.position.set(0, by + 0.74, -0.52);
-      bunk.add(strip);
-    });
-
-    // Ladder on right front
-    const railGeo = trackGeo(new THREE.CylinderGeometry(0.025, 0.025, 2.2, 8));
-    [-0.18, 0.18].forEach((rx) => {
-      const rail = new THREE.Mesh(railGeo, brushedAlumMat);
-      rail.position.set(0.75 + rx, 1.1, 0.62);
-      bunk.add(rail);
-    });
-    for (let r = 0; r < 5; r++) {
-      const rung = new THREE.Mesh(
-        trackGeo(new THREE.CylinderGeometry(0.018, 0.018, 0.36, 8)),
-        brushedAlumMat
-      );
-      rung.rotation.z = Math.PI / 2;
-      rung.position.set(0.75, 0.35 + r * 0.38, 0.62);
-      bunk.add(rung);
-    }
-
-    scene.add(bunk);
   };
 
-  buildRestBunk(6.8, -6.25);
-  buildRestBunk(9.7, -6.25);
+  buildIndoorPlant(5.8, -2.5, 0.9);
+  buildIndoorPlant(13.6, -5.6, 1.2);
+  buildIndoorPlant(13.6, 5.8, 1.1);
+  buildIndoorPlant(6.2, 5.8, 0.85);
 
-
-
-  // Warm Floor Lamp beside Sofa
-  const lampGroup = new THREE.Group();
-  lampGroup.position.set(12.2, 0, -1.1);
-  const lampStem = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.03, 0.04, 2.1, 8)),
-    brushedAlumMat
+  // -------------------------------------------------------------------------
+  // 7. LÁMPARA DE PIE MODERNA DE ILUMINACIÓN SUAVE
+  // -------------------------------------------------------------------------
+  const floorLamp = new THREE.Group();
+  floorLamp.position.set(13.0, 0, 2.5);
+  const lampFoot = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.26, 0.28, 0.04, 16)),
+    darkMetalMat
   );
-  lampStem.position.y = 1.05;
-  const lampShade = new THREE.Mesh(
-    trackGeo(new THREE.CylinderGeometry(0.24, 0.38, 0.45, 16, 1, true)),
+  lampFoot.position.y = 0.02;
+  const lampRod = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.02, 0.025, 2.2, 8)),
+    darkMetalMat
+  );
+  lampRod.position.y = 1.1;
+  const shade = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.18, 0.32, 0.4, 16, 1, true)),
     trackMat(
       new THREE.MeshStandardMaterial({
-        color: 0xfde68a,
-        emissive: 0xf59e0b,
-        emissiveIntensity: 0.75,
-        roughness: 0.7,
+        color: 0xfef08a,
+        emissive: 0xfde047,
+        emissiveIntensity: 0.85,
+        roughness: 0.5,
         side: THREE.DoubleSide,
       })
     )
   );
-  lampShade.position.y = 2.08;
-  lampGroup.add(lampStem, lampShade);
-  scene.add(lampGroup);
+  shade.position.y = 2.15;
+  floorLamp.add(lampFoot, lampRod, shade);
+  scene.add(floorLamp);
 
   // =========================================================================
   // BALANCED ZONE LIGHTING RIG (<= 2 Shadow Casters + Distinct Zone Moods)
@@ -1414,14 +1490,10 @@ export function buildColmenaOffice(
   sheldonSpot.target.position.set(0.2, 0.8, -3.5);
   scene.add(sheldonSpot, sheldonSpot.target);
 
-  // Zona de descanso: Warm Cozy Amber Light + TV Ambient Glow
-  const loungeWarmLight = new THREE.PointLight(0xfb923c, 22, 16, 1.5);
-  loungeWarmLight.position.set(11.0, 3.8, -0.5);
+  // Zona de descanso: Luz ambiental suave y cálida tipo lounge
+  const loungeWarmLight = new THREE.PointLight(0xfde68a, 16, 18, 1.4);
+  loungeWarmLight.position.set(10.2, 3.6, 0.5);
   scene.add(loungeWarmLight);
-
-  const tvGlowLight = new THREE.PointLight(0x38bdf8, 8, 9, 1.8);
-  tvGlowLight.position.set(8.8, 1.8, 4.2);
-  scene.add(tvGlowLight);
 
   return {
     dnaHelix,
