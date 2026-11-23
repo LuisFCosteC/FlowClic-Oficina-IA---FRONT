@@ -20,7 +20,6 @@ import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
 import { AuditPanel } from './AuditPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
-import { DbConnectionPanel } from './DbConnectionPanel';
 import { LimitsPanel } from './LimitsPanel';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { RulesPanel } from './RulesPanel';
@@ -29,26 +28,24 @@ import { WorkspacesPanel } from './WorkspacesPanel';
 import { AdminErrorCard } from './AdminErrorCard';
 
 export type AdminTab =
-  | 'workspaces'
-  | 'connections'
   | 'agents'
+  | 'connections'
+  | 'workspaces'
   | 'project'
   | 'rules'
   | 'limits'
   | 'users'
-  | 'audit'
-  | 'db';
+  | 'audit';
 
 const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
-  { id: 'workspaces', label: 'Espacios de trabajo', enabled: true },
-  { id: 'connections', label: 'Conexiones API', enabled: true },
   { id: 'agents', label: 'Agentes', enabled: true },
+  { id: 'connections', label: 'Conexiones', enabled: true },
+  { id: 'workspaces', label: 'Espacios de trabajo', enabled: true },
   { id: 'project', label: 'Proyecto', enabled: true },
   { id: 'rules', label: 'Reglas', enabled: true },
   { id: 'limits', label: 'Límites', enabled: true },
   { id: 'users', label: 'Usuarios', enabled: true },
   { id: 'audit', label: 'Auditoría', enabled: true },
-  { id: 'db', label: 'Conexión BD', enabled: true },
 ];
 
 const DISABLED_TEXT = 'Disponible tras el login (S06)';
@@ -181,22 +178,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
       </div>
 
       <div className="flex-1 overflow-auto p-5 lg:px-8">
-        {tab === 'workspaces' && <WorkspacesPanel />}
-
-        {tab === 'connections' && <ConnectionsPanel agents={agents} />}
-
-        {tab === 'project' && <ProjectSettingsPanel />}
-
-        {tab === 'rules' && <RulesPanel />}
-
-        {tab === 'limits' && <LimitsPanel />}
-
-        {tab === 'users' && <UsersPanel />}
-
-        {tab === 'audit' && <AuditPanel />}
-
-        {tab === 'db' && <DbConnectionPanel />}
-
         {tab === 'agents' && (
           <section className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 px-5 py-3.5">
@@ -403,6 +384,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
         )}
       </section>
         )}
+
+        {tab === 'connections' && (
+          <ConnectionsPanel agents={displayedAgents.length > 0 ? displayedAgents : agents} />
+        )}
+
+        {tab === 'workspaces' && <WorkspacesPanel />}
+
+        {tab === 'project' && <ProjectSettingsPanel />}
+
+        {tab === 'rules' && <RulesPanel />}
+
+        {tab === 'limits' && <LimitsPanel />}
+
+        {tab === 'users' && <UsersPanel />}
+
+        {tab === 'audit' && <AuditPanel />}
       </div>
 
       {/* Modal de confirmación en UI para Archivar / Restaurar (sin window.confirm) */}

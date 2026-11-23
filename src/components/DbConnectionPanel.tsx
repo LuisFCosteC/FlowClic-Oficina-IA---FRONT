@@ -141,7 +141,7 @@ export const DbConnectionPanel: React.FC = () => {
       if (err instanceof ApiError) {
         if (err.status === 403) {
           setSaveError(
-            'Cambio bloqueado por el servidor (403 FORBIDDEN): ADMIN_ALLOW_DB_CHANGE no está activado en las variables de entorno.'
+            'El cambio de BD está desactivado por seguridad. Para activarlo, pon ADMIN_ALLOW_DB_CHANGE=true en el .env de la API y reinicia.'
           );
         } else {
           setSaveError(err.message);
@@ -392,6 +392,7 @@ export const DbConnectionPanel: React.FC = () => {
               value={dbUrl}
               onChange={(e) => setDbUrl(e.target.value)}
               placeholder="ej. file:local.db o libsql://flowclic-tu-bd.turso.io"
+              autoComplete="off"
               className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2.5 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
             />
             <p className="mt-1 text-[11px] text-slate-500">
