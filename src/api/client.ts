@@ -8,6 +8,7 @@ import type {
   ApiLoadTeamResult,
   ApiModelInfo,
   ApiProjectSettings,
+  ApiLimitsSettings,
   ApiRule,
   ApiRuleCreate,
   ApiRuleUpdate,
@@ -102,6 +103,10 @@ export const api = {
     request<ApiProjectSettings>('GET', '/api/admin/settings/project'),
   updateProjectSettings: (body: ApiProjectSettings) =>
     request<ApiProjectSettings>('PUT', '/api/admin/settings/project', body),
+  getLimitsSettings: () =>
+    request<ApiLimitsSettings>('GET', '/api/admin/settings/limits'),
+  updateLimitsSettings: (body: ApiLimitsSettings) =>
+    request<ApiLimitsSettings>('PUT', '/api/admin/settings/limits', body),
   upsertWorkspace: (id: string, body: ApiWorkspaceBody) =>
     request<ApiWorkspace>('PUT', `/api/admin/workspaces/${encodeURIComponent(id)}`, body),
   deleteWorkspace: (id: string) =>

@@ -73,6 +73,12 @@ export interface ApiProjectSettings {
   stack: string[];
 }
 
+export interface ApiLimitsSettings {
+  maxAgents: number;
+  maxActiveTicketsPerAgent: number;
+  requireApprovalForDone: boolean;
+}
+
 export type ApiRuleSeverity = 'MUST' | 'SHOULD';
 
 export interface ApiRule {

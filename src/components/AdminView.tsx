@@ -20,6 +20,7 @@ import { Agent } from '../types/orbis';
 import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
+import { LimitsPanel } from './LimitsPanel';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { RulesPanel } from './RulesPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
@@ -41,7 +42,7 @@ const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'agents', label: 'Agentes', enabled: true },
   { id: 'project', label: 'Proyecto', enabled: true },
   { id: 'rules', label: 'Reglas', enabled: true },
-  { id: 'limits', label: 'Límites', enabled: false },
+  { id: 'limits', label: 'Límites', enabled: true },
   { id: 'users', label: 'Usuarios', enabled: false },
   { id: 'audit', label: 'Auditoría', enabled: false },
   { id: 'db', label: 'Conexión BD', enabled: true },
@@ -205,6 +206,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         {tab === 'project' && <ProjectSettingsPanel />}
 
         {tab === 'rules' && <RulesPanel />}
+
+        {tab === 'limits' && <LimitsPanel />}
 
         {tab === 'db' && (
           <section className="max-w-3xl rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
