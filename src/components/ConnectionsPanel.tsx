@@ -8,11 +8,12 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { formatDate } from '../api/mappers';
 import type { ApiCredential, ApiModelInfo, CredentialProvider } from '../api/types';
 import type { Agent } from '../types/orbis';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
+import { AdminErrorCard } from './AdminErrorCard';
 
 const PROVIDER_NAMES: Record<CredentialProvider, string> = {
   anthropic: 'Anthropic',
@@ -49,11 +50,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({ agents }) =>
       setCredentials(creds);
       setModels(mods);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Error al cargar las conexiones y modelos.');
-      }
+      setError(getApiErrorMessage(err, 'Error al cargar las conexiones y modelos.'));
     } finally {
       setLoading(false);
     }
@@ -92,6 +89,14 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({ agents }) =>
       return matchesProvider && matchesAgent;
     });
   }, [credentials, selectedProvider, selectedAgentId]);
+
+  if (error && credentials.length === 0 && models.length === 0 && !loading) {
+    return (
+      <section className="space-y-5">
+        <AdminErrorCard message={error} onRetry={() => void fetchData()} />
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-5">

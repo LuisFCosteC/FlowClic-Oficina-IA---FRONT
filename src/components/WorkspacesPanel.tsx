@@ -12,8 +12,9 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import type { ApiWorkspace, ApiWorkspaceCheck } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 interface WorkspaceCheckState {
   loading: boolean;
@@ -59,11 +60,7 @@ export const WorkspacesPanel: React.FC = () => {
       const data = await api.listWorkspaces();
       setWorkspaces(data);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setListError(err.message);
-      } else {
-        setListError('Error al cargar los espacios de trabajo.');
-      }
+      setListError(getApiErrorMessage(err, 'Error al cargar los espacios de trabajo.'));
     } finally {
       setLoading(false);
     }
@@ -178,6 +175,14 @@ export const WorkspacesPanel: React.FC = () => {
       setIsDeleting(false);
     }
   };
+
+  if (listError && workspaces.length === 0 && !loading) {
+    return (
+      <section className="space-y-4">
+        <AdminErrorCard message={listError} onRetry={() => void fetchWorkspaces()} />
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4">

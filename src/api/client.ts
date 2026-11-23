@@ -44,6 +44,33 @@ export class ApiError extends Error {
   }
 }
 
+export function getApiErrorMessage(
+  err: unknown,
+  fallback = 'Error al comunicar con la API.'
+): string {
+  if (err instanceof ApiError) {
+    if (err.status === 0 || err.code === 'NETWORK') {
+      return 'No se pudo conectar con la API (¿está arrancada en el puerto 4000?)';
+    }
+    return err.message;
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    if (
+      msg.includes('fetch') ||
+      msg.includes('network') ||
+      msg.includes('failed') ||
+      msg.includes('connection') ||
+      msg.includes('api no responde') ||
+      msg.includes('puerto 4000')
+    ) {
+      return 'No se pudo conectar con la API (¿está arrancada en el puerto 4000?)';
+    }
+    return err.message;
+  }
+  return fallback;
+}
+
 async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
@@ -59,7 +86,11 @@ async function request<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, 'NETWORK', 'La API no responde.');
+    throw new ApiError(
+      0,
+      'NETWORK',
+      'No se pudo conectar con la API (¿está arrancada en el puerto 4000?)'
+    );
   }
   if (res.status === 204) return undefined as T;
   let data: unknown = null;

@@ -15,9 +15,10 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { formatDate } from '../api/mappers';
 import type { ApiDbBackupResult, ApiDbInfo, ApiDbTestResult } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 export const DbConnectionPanel: React.FC = () => {
   const [dbInfo, setDbInfo] = useState<ApiDbInfo | null>(null);
@@ -62,16 +63,12 @@ export const DbConnectionPanel: React.FC = () => {
       const data = await api.getDbInfo();
       setDbInfo(data);
     } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.code === 'ENCRYPTION_UNAVAILABLE') {
-          setError(
-            'Bóveda de cifrado no disponible: falta APP_MASTER_KEY en el servidor.'
-          );
-        } else {
-          setError(err.message);
-        }
+      if (err instanceof ApiError && err.code === 'ENCRYPTION_UNAVAILABLE') {
+        setError(
+          'Bóveda de cifrado no disponible: falta APP_MASTER_KEY en el servidor.'
+        );
       } else {
-        setError('Error al consultar el estado de la base de datos.');
+        setError(getApiErrorMessage(err, 'Error al consultar el estado de la base de datos.'));
       }
     } finally {
       setLoading(false);
@@ -175,6 +172,14 @@ export const DbConnectionPanel: React.FC = () => {
       setBackingUp(false);
     }
   };
+
+  if (error && !dbInfo && !loading) {
+    return (
+      <section className="max-w-4xl space-y-6">
+        <AdminErrorCard message={error} onRetry={() => void fetchDbInfo()} />
+      </section>
+    );
+  }
 
   return (
     <section className="max-w-4xl space-y-6">

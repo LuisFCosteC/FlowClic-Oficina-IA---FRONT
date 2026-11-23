@@ -11,9 +11,10 @@ import {
   Ticket,
   Users,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { API_URL } from '../api/config';
 import type { ApiLimitsSettings } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 interface FieldErrors {
   maxAgents?: string;
@@ -27,12 +28,14 @@ export const LimitsPanel: React.FC = () => {
   const [requireApprovalForDone, setRequireApprovalForDone] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
 
   const fetchLimits = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     setErrors({});
     try {
       const data = await api.getLimitsSettings();
@@ -40,11 +43,9 @@ export const LimitsPanel: React.FC = () => {
       setMaxActiveTicketsPerAgent(data.maxActiveTicketsPerAgent ?? 3);
       setRequireApprovalForDone(Boolean(data.requireApprovalForDone));
     } catch (err) {
-      if (err instanceof ApiError) {
-        setErrors({ general: err.message });
-      } else {
-        setErrors({ general: 'Error al cargar los límites del sistema.' });
-      }
+      const msg = getApiErrorMessage(err, 'Error al cargar los límites del sistema.');
+      setLoadError(msg);
+      setErrors({ general: msg });
     } finally {
       setLoading(false);
     }
@@ -125,6 +126,14 @@ export const LimitsPanel: React.FC = () => {
       setSaving(false);
     }
   };
+
+  if (loadError && !loading) {
+    return (
+      <section className="max-w-3xl space-y-5">
+        <AdminErrorCard message={loadError} onRetry={() => void fetchLimits()} />
+      </section>
+    );
+  }
 
   return (
     <section className="max-w-3xl space-y-5">

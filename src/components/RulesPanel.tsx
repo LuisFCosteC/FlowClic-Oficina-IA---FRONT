@@ -14,8 +14,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import type { ApiRule, ApiRuleSeverity } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 const GLOBAL_RESTRICTIONS_LIST: string[] = [
   'Ningún agente hace merge a `main` ni despliega a producción. Eso lo hace solo el CEO.',
@@ -65,11 +66,7 @@ export const RulesPanel: React.FC = () => {
       const data = await api.listRules();
       setRules(data);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Error al cargar las reglas.');
-      }
+      setError(getApiErrorMessage(err, 'Error al cargar las reglas.'));
     } finally {
       setLoading(false);
     }
@@ -200,6 +197,36 @@ export const RulesPanel: React.FC = () => {
       setIsDeleting(false);
     }
   };
+
+  if (error && rules.length === 0 && !loading) {
+    return (
+      <section className="space-y-6">
+        <AdminErrorCard message={error} onRetry={() => void fetchRules()} />
+        {/* Sección Restricciones Globales Inviolables */}
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/5 p-6">
+          <div className="flex items-center gap-2.5 text-amber-300">
+            <Lock className="h-4 w-4" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider">
+              Restricciones Globales Inviolables ({GLOBAL_RESTRICTIONS_LIST.length} bloqueadas con candado)
+            </h3>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {GLOBAL_RESTRICTIONS_LIST.map((text, idx) => (
+              <div
+                key={idx}
+                className="flex items-start gap-2.5 rounded-xl border border-amber-500/20 bg-[#070B14]/80 p-3 text-xs text-amber-100/90"
+              >
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span>
+                  <strong className="text-amber-400">{idx + 1}.</strong> {text}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">

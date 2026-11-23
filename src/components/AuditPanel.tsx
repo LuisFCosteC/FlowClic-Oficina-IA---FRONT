@@ -11,9 +11,10 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { formatDate } from '../api/mappers';
 import type { ApiAuditEntry } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 export const AuditPanel: React.FC = () => {
   const [entries, setEntries] = useState<ApiAuditEntry[]>([]);
@@ -44,11 +45,7 @@ export const AuditPanel: React.FC = () => {
       });
       setEntries(data);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Error al consultar el registro de auditoría.');
-      }
+      setError(getApiErrorMessage(err, 'Error al consultar el registro de auditoría.'));
     } finally {
       setLoading(false);
     }
@@ -65,6 +62,14 @@ export const AuditPanel: React.FC = () => {
   };
 
   const hasActiveFilters = Boolean(filterAction || filterFrom || filterTo);
+
+  if (error && entries.length === 0 && !loading) {
+    return (
+      <section className="space-y-4">
+        <AdminErrorCard message={error} onRetry={() => void fetchAudit()} />
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4">

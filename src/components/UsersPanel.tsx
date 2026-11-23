@@ -14,8 +14,9 @@ import {
   UserX,
   X,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import type { ApiAdminUser, ApiUserRole } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 const ROLES: Array<{ id: ApiUserRole; label: string; desc: string }> = [
   { id: 'ADMIN', label: 'Administrador (ADMIN)', desc: 'Control total de la plataforma' },
@@ -65,11 +66,7 @@ export const UsersPanel: React.FC = () => {
       const data = await api.listUsers();
       setUsers(data);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Error al cargar la lista de usuarios.');
-      }
+      setError(getApiErrorMessage(err, 'Error al cargar la lista de usuarios.'));
     } finally {
       setLoading(false);
     }
@@ -178,6 +175,14 @@ export const UsersPanel: React.FC = () => {
       setToggling(false);
     }
   };
+
+  if (error && users.length === 0 && !loading) {
+    return (
+      <section className="space-y-4">
+        <AdminErrorCard message={error} onRetry={() => void fetchUsers()} />
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-4">

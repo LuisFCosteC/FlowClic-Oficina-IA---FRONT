@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { agentFromApi, formatDate } from '../api/mappers';
 import { Agent } from '../types/orbis';
 import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
@@ -26,6 +26,7 @@ import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { RulesPanel } from './RulesPanel';
 import { UsersPanel } from './UsersPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
+import { AdminErrorCard } from './AdminErrorCard';
 
 export type AdminTab =
   | 'workspaces'
@@ -100,11 +101,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       const data = await api.listAgents(includeArchived);
       setFetchedAgents(data.map(agentFromApi));
     } catch (err) {
-      if (err instanceof ApiError) {
-        setAgentsError(err.message);
-      } else {
-        setAgentsError('Error al cargar agentes.');
-      }
+      setAgentsError(getApiErrorMessage(err, 'Error al cargar agentes.'));
     } finally {
       setLoadingAgents(false);
     }
@@ -249,30 +246,39 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             </div>
 
-            {agentsError && (
-              <div className="m-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300">
-                {agentsError}
-              </div>
-            )}
-
-            {displayedAgents.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-xs text-slate-500">
-                  {showArchived
-                    ? 'No se encontraron agentes (activos ni archivados).'
-                    : 'Aún no hay agentes activos. Crea el primero para empezar.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={onOpenCreateAgent}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Crear primer agente
-                </button>
+            {agentsError && displayedAgents.length === 0 && !loadingAgents ? (
+              <div className="p-5">
+                <AdminErrorCard
+                  message={agentsError}
+                  onRetry={() => void loadAgentsList(showArchived)}
+                />
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {agentsError && (
+                  <div className="m-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300">
+                    {agentsError}
+                  </div>
+                )}
+
+                {displayedAgents.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-xs text-slate-500">
+                      {showArchived
+                        ? 'No se encontraron agentes (activos ni archivados).'
+                        : 'Aún no hay agentes activos. Crea el primero para empezar.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onOpenCreateAgent}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Crear primer agente
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left text-xs">
                   <thead className="text-[11px] uppercase tracking-wide text-slate-500">
                     <tr>
@@ -393,7 +399,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </table>
               </div>
             )}
-          </section>
+          </>
+        )}
+      </section>
         )}
       </div>
 

@@ -11,9 +11,10 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { API_URL } from '../api/config';
 import type { ApiProjectSettings } from '../api/types';
+import { AdminErrorCard } from './AdminErrorCard';
 
 interface FieldErrors {
   companyName?: string;
@@ -36,12 +37,14 @@ export const ProjectSettingsPanel: React.FC = () => {
   const [newStackItem, setNewStackItem] = useState('');
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
 
   const fetchProjectSettings = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     setErrors({});
     try {
       const data = await api.getProjectSettings();
@@ -51,11 +54,9 @@ export const ProjectSettingsPanel: React.FC = () => {
       setGoals(data.goals ?? []);
       setStack(data.stack ?? []);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setErrors({ general: err.message });
-      } else {
-        setErrors({ general: 'Error al cargar la configuración del proyecto.' });
-      }
+      const msg = getApiErrorMessage(err, 'Error al cargar la configuración del proyecto.');
+      setLoadError(msg);
+      setErrors({ general: msg });
     } finally {
       setLoading(false);
     }
@@ -205,6 +206,17 @@ export const ProjectSettingsPanel: React.FC = () => {
       setSaving(false);
     }
   };
+
+  if (loadError && !loading) {
+    return (
+      <section className="max-w-4xl space-y-5">
+        <AdminErrorCard
+          message={loadError}
+          onRetry={() => void fetchProjectSettings()}
+        />
+      </section>
+    );
+  }
 
   return (
     <section className="max-w-4xl space-y-5">
