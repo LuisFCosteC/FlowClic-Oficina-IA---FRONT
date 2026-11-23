@@ -13,24 +13,29 @@ import type { ApiSetupStatus } from '../api/types';
 import { Agent } from '../types/orbis';
 import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
+import { WorkspacesPanel } from './WorkspacesPanel';
 
 type AdminTab =
-  | 'db'
+  | 'workspaces'
+  | 'connections'
   | 'agents'
   | 'project'
   | 'rules'
   | 'limits'
   | 'users'
-  | 'audit';
+  | 'audit'
+  | 'db';
 
 const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
-  { id: 'db', label: 'Conexión BD', enabled: true },
+  { id: 'workspaces', label: 'Espacios de trabajo', enabled: true },
+  { id: 'connections', label: 'Conexiones API', enabled: false },
   { id: 'agents', label: 'Agentes', enabled: true },
   { id: 'project', label: 'Proyecto', enabled: false },
   { id: 'rules', label: 'Reglas', enabled: false },
   { id: 'limits', label: 'Límites', enabled: false },
   { id: 'users', label: 'Usuarios', enabled: false },
   { id: 'audit', label: 'Auditoría', enabled: false },
+  { id: 'db', label: 'Conexión BD', enabled: true },
 ];
 
 const DISABLED_TEXT = 'Disponible tras el login (S06)';
@@ -118,6 +123,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
       </div>
 
       <div className="flex-1 overflow-auto p-5 lg:px-8">
+        {tab === 'workspaces' && <WorkspacesPanel />}
+
         {tab === 'db' && (
           <section className="max-w-3xl rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
             <div className="flex items-center justify-between gap-3">

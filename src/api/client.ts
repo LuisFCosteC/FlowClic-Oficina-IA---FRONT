@@ -13,6 +13,8 @@ import type {
   ApiTicketCreate,
   ApiTicketStatus,
   ApiWorkspace,
+  ApiWorkspaceBody,
+  ApiWorkspaceCheck,
   CredentialProvider,
 } from './types';
 
@@ -30,7 +32,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown
 ): Promise<T> {
@@ -78,6 +80,12 @@ export const api = {
 
   listModels: () => request<ApiModelInfo[]>('GET', '/api/models'),
   listWorkspaces: () => request<ApiWorkspace[]>('GET', '/api/admin/workspaces'),
+  upsertWorkspace: (id: string, body: ApiWorkspaceBody) =>
+    request<ApiWorkspace>('PUT', `/api/admin/workspaces/${encodeURIComponent(id)}`, body),
+  deleteWorkspace: (id: string) =>
+    request<void>('DELETE', `/api/admin/workspaces/${encodeURIComponent(id)}`),
+  checkWorkspace: (id: string) =>
+    request<ApiWorkspaceCheck>('POST', `/api/admin/workspaces/${encodeURIComponent(id)}/check`),
 
   createTicket: (body: ApiTicketCreate) => request<ApiTicket>('POST', '/api/tickets', body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>

@@ -54,6 +54,17 @@ export interface ApiWorkspace {
   updatedAt?: string;
 }
 
+export interface ApiWorkspaceCheck {
+  exists: boolean;
+  isDir: boolean;
+  writable: boolean;
+}
+
+export interface ApiWorkspaceBody {
+  name: string;
+  path: string;
+}
+
 export interface ApiAgent {
   id: string;
   name: string;
