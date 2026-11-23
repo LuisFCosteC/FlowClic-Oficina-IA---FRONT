@@ -33,6 +33,18 @@ const NAV_ITEMS: Array<{
   icon: React.FC<{ className?: string }>;
 }> = [
   {
+    id: 'kanban',
+    label: 'To-Do & Pipeline de Tareas',
+    sublabel: 'Kanban de Agentes',
+    icon: KanbanSquare,
+  },
+  {
+    id: 'roadmap',
+    label: 'Calendario de Proyectos',
+    sublabel: 'Roadmap & Gantt',
+    icon: CalendarRange,
+  },
+  {
     id: 'cerebro',
     label: 'Cerebro FlowClic',
     sublabel: 'Router & Aprobaciones',
@@ -43,18 +55,6 @@ const NAV_ITEMS: Array<{
     label: 'Oficina IA 3D',
     sublabel: 'Vista Isométrica Viva',
     icon: Box,
-  },
-  {
-    id: 'kanban',
-    label: 'To-Do & Pipeline',
-    sublabel: 'Kanban de Agentes',
-    icon: KanbanSquare,
-  },
-  {
-    id: 'roadmap',
-    label: 'Calendario Proyectos',
-    sublabel: 'Roadmap & Gantt',
-    icon: CalendarRange,
   },
 ];
 

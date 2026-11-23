@@ -32,14 +32,6 @@ const MODULE_HEADERS: Record<
   ActiveModule,
   { breadcrumb: string; title: string }
 > = {
-  cerebro: {
-    breadcrumb: 'FlowClic Oficina IA / Orquestación',
-    title: 'Cerebro FlowClic',
-  },
-  colmena3d: {
-    breadcrumb: 'FlowClic Oficina IA / Vista Principal 3D',
-    title: 'Oficina IA 3D',
-  },
   kanban: {
     breadcrumb: 'FlowClic Oficina IA / Ejecución',
     title: 'To-Do & Pipeline de Tareas',
@@ -48,10 +40,18 @@ const MODULE_HEADERS: Record<
     breadcrumb: 'FlowClic Oficina IA / Planificación',
     title: 'Calendario de Proyectos',
   },
+  cerebro: {
+    breadcrumb: 'FlowClic Oficina IA / Orquestación',
+    title: 'Cerebro FlowClic',
+  },
+  colmena3d: {
+    breadcrumb: 'FlowClic Oficina IA / Vista Principal 3D',
+    title: 'Oficina IA 3D',
+  },
 };
 
 export default function App() {
-  const [activeModule, setActiveModule] = useState<ActiveModule>('colmena3d');
+  const [activeModule, setActiveModule] = useState<ActiveModule>('kanban');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [createAgentOpen, setCreateAgentOpen] = useState<boolean>(false);
