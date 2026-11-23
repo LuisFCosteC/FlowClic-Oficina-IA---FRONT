@@ -58,6 +58,7 @@ export interface Agent {
   permissions?: AgentPermissions;
   modelConfig?: AgentModelConfig;
   limits?: AgentLimits;
+  archivedAt?: string | null;
   raw?: ApiAgent;
 }
 

@@ -70,9 +70,15 @@ export const api = {
   setupStatus: () => request<ApiSetupStatus>('GET', '/api/setup/status'),
   snapshot: () => request<ApiSnapshot>('GET', '/api/snapshot'),
 
+  listAgents: (includeArchived = false) =>
+    request<ApiAgent[]>('GET', `/api/agents${includeArchived ? '?includeArchived=true' : ''}`),
   createAgent: (body: ApiAgentCreate) => request<ApiAgent>('POST', '/api/agents', body),
   updateAgent: (id: string, body: ApiAgentUpdate) =>
     request<ApiAgent>('PATCH', `/api/agents/${encodeURIComponent(id)}`, body),
+  archiveAgent: (id: string) =>
+    request<ApiAgent>('POST', `/api/agents/${encodeURIComponent(id)}/archive`),
+  restoreAgent: (id: string) =>
+    request<ApiAgent>('POST', `/api/agents/${encodeURIComponent(id)}/restore`),
   setAgentStatus: (id: string, status: ApiAgentStatus) =>
     request<ApiAgent>('PATCH', `/api/agents/${encodeURIComponent(id)}/status`, { status }),
   loadBaseTeam: () =>

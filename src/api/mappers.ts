@@ -90,6 +90,7 @@ export function agentFromApi(a: ApiAgent): Agent {
     permissions: a.permissions,
     modelConfig: a.model,
     limits: a.limits,
+    archivedAt: a.archivedAt,
     raw: a,
   };
 }
