@@ -780,6 +780,90 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                       </label>
                     </div>
                   </div>
+
+                  {/* Previsualización Visual del Avatar estilo LEGO */}
+                  <div className="mt-4 rounded-xl border border-slate-800/90 bg-[#040810] p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {/* Avatar LEGO SVG Ilustrado dinámico */}
+                      <div className="relative flex h-24 w-20 shrink-0 items-center justify-center rounded-xl bg-slate-950/80 border border-slate-800 p-2 shadow-inner">
+                        <svg viewBox="0 0 100 130" className="h-full w-full drop-shadow-md">
+                          {/* Stud Superior */}
+                          <rect x="42" y="6" width="16" height="8" rx="2" fill="#FCD34D" stroke="#EAB308" strokeWidth="1.5" />
+                          {/* Cabello */}
+                          {hairStyle === 'short' && (
+                            <path d="M 30 20 Q 50 12 70 20 L 72 26 L 28 26 Z" fill="#3B2618" />
+                          )}
+                          {hairStyle === 'parted' && (
+                            <path d="M 28 22 Q 45 10 72 18 L 74 27 L 38 27 Q 32 23 28 22 Z" fill="#3B2618" />
+                          )}
+                          {hairStyle === 'long' && (
+                            <path d="M 27 20 Q 50 11 73 20 L 76 46 L 68 46 L 68 28 L 32 28 L 32 46 L 24 46 Z" fill="#D97706" />
+                          )}
+                          {hairStyle === 'bun' && (
+                            <g>
+                              <circle cx="50" cy="8" r="7" fill="#3B2618" />
+                              <path d="M 30 21 Q 50 14 70 21 L 70 26 L 30 26 Z" fill="#3B2618" />
+                            </g>
+                          )}
+                          {hairStyle === 'curly' && (
+                            <path d="M 26 22 Q 50 10 74 22 Q 78 28 72 32 Q 50 26 28 32 Z" fill="#1C1917" />
+                          )}
+                          {/* Cabeza Cilíndrica LEGO */}
+                          <rect x="33" y="18" width="34" height="26" rx="4" fill="#FCD34D" stroke="#EAB308" strokeWidth="1" />
+                          {/* Cejas */}
+                          <path d="M 39 23 L 45 24 M 55 24 L 61 23" stroke="#451A03" strokeWidth="1.8" strokeLinecap="round" />
+                          {/* Ojos con punto blanco de brillo */}
+                          <circle cx="42" cy="28" r="2.2" fill="#0F172A" />
+                          <circle cx="43" cy="27" r="0.8" fill="#FFFFFF" />
+                          <circle cx="58" cy="28" r="2.2" fill="#0F172A" />
+                          <circle cx="59" cy="27" r="0.8" fill="#FFFFFF" />
+                          {/* Gafas */}
+                          {glasses && (
+                            <g stroke="#0F172A" strokeWidth="1.8" fill="none">
+                              <rect x="37" y="24" width="10" height="9" rx="2" />
+                              <rect x="53" y="24" width="10" height="9" rx="2" />
+                              <line x1="47" y1="28" x2="53" y2="28" />
+                            </g>
+                          )}
+                          {/* Sonrisa LEGO */}
+                          <path d="M 45 37 Q 50 41 55 37" stroke="#451A03" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+                          {/* Cuello */}
+                          <rect x="44" y="44" width="12" height="4" fill="#FCD34D" />
+                          {/* Torso Trapezoidal LEGO */}
+                          <polygon points="32,48 68,48 74,84 26,84" fill={avatarColor} stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+                          {/* Detalle en Torso: Badge Tech */}
+                          <rect x="45" y="52" width="10" height="14" rx="2" fill="#0F172A" opacity="0.4" />
+                          <circle cx="50" cy="56" r="2.5" fill="#38BDF8" />
+                          {/* Brazos LEGO */}
+                          <path d="M 31 48 L 22 72 L 20 80" stroke={avatarColor} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                          <path d="M 69 48 L 78 72 L 80 80" stroke={avatarColor} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                          {/* Manos Pinza LEGO */}
+                          <path d="M 17 84 A 4 4 0 1 1 23 88" stroke="#FCD34D" strokeWidth="2.5" fill="none" />
+                          <path d="M 77 88 A 4 4 0 1 1 83 84" stroke="#FCD34D" strokeWidth="2.5" fill="none" />
+                          {/* Pelvis / Cintura */}
+                          <rect x="30" y="84" width="40" height="8" rx="1.5" fill="#1E293B" />
+                          {/* Piernas Rectangulares LEGO */}
+                          <rect x="30" y="92" width="18" height="26" fill="#1E293B" stroke="#0F172A" strokeWidth="1" />
+                          <rect x="52" y="92" width="18" height="26" fill="#1E293B" stroke="#0F172A" strokeWidth="1" />
+                          {/* Zapatos */}
+                          <rect x="29" y="118" width="19" height="7" rx="1" fill="#0F172A" />
+                          <rect x="52" y="118" width="19" height="7" rx="1" fill="#0F172A" />
+                        </svg>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-slate-100">{name || 'Agente'}</span>
+                          <span className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300">
+                            LEGO PROCEDURAL
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Minifigura 3D procedural con cinemática directa, pinzas articuladas y peinado estilizado en la Oficina 3D.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

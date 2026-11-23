@@ -62,7 +62,11 @@ export function createLabFloorTexture(maxAnisotropy: number): THREE.CanvasTextur
   return finalizeColorTexture(canvas, maxAnisotropy, 5, 5);
 }
 
-export function createWoodFloorTexture(maxAnisotropy: number): THREE.CanvasTexture {
+export function createWoodFloorTexture(
+  maxAnisotropy: number,
+  repeatX = 3,
+  repeatY = 3
+): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
@@ -100,7 +104,7 @@ export function createWoodFloorTexture(maxAnisotropy: number): THREE.CanvasTextu
     }
   }
 
-  return finalizeColorTexture(canvas, maxAnisotropy, 3, 3);
+  return finalizeColorTexture(canvas, maxAnisotropy, repeatX, repeatY);
 }
 
 export function createBbtRugTexture(maxAnisotropy: number): THREE.CanvasTexture {
@@ -580,6 +584,254 @@ export function createGamingScreenTexture(
     ctx.font = '16px monospace';
     ctx.fillText('SCORE: 58,400', 24, 68);
   }
+
+  return finalizeColorTexture(canvas, maxAnisotropy);
+}
+
+export function createLegoFaceTexture(
+  skinHex = '#f4c29f',
+  isSerious = false
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = skinHex;
+  ctx.fillRect(0, 0, 512, 256);
+
+  const centroX = 256;
+
+  // Eyebrows
+  ctx.strokeStyle = '#2c1b12';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(centroX - 65, 82);
+  ctx.quadraticCurveTo(centroX - 40, isSerious ? 72 : 76, centroX - 20, 85);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(centroX + 20, 80);
+  ctx.quadraticCurveTo(centroX + 45, isSerious ? 68 : 74, centroX + 68, 80);
+  ctx.stroke();
+
+  // LEGO eyes with white specular highlight
+  [-42, 42].forEach((offsetX) => {
+    ctx.fillStyle = '#111111';
+    ctx.beginPath();
+    ctx.arc(centroX + offsetX, 114, 13, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(centroX + offsetX - 4, 109, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Mouth
+  ctx.strokeStyle = '#111111';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (isSerious) {
+    ctx.moveTo(centroX - 28, 175);
+    ctx.quadraticCurveTo(centroX, 177, centroX + 28, 172);
+  } else {
+    ctx.moveTo(centroX - 28, 168);
+    ctx.quadraticCurveTo(centroX, 184, centroX + 28, 168);
+  }
+  ctx.stroke();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createFlashTorsoTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#c91a09';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // White center circle
+  ctx.beginPath();
+  ctx.arc(256, 250, 95, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = '#111111';
+  ctx.stroke();
+
+  // Yellow Flash lightning bolt
+  ctx.beginPath();
+  ctx.moveTo(275, 130);
+  ctx.lineTo(205, 255);
+  ctx.lineTo(255, 255);
+  ctx.lineTo(225, 375);
+  ctx.lineTo(315, 240);
+  ctx.lineTo(260, 240);
+  ctx.closePath();
+  ctx.fillStyle = '#f2cd37';
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#111111';
+  ctx.stroke();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createAgentLegoTorsoTexture(
+  colorHex = '#06b6d4',
+  agentName = ''
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = colorHex;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Collar
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(200, 0);
+  ctx.lineTo(256, 110);
+  ctx.lineTo(312, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tech Badge / Circuit
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(256, 260, 80, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 36px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(agentName.slice(0, 5).toUpperCase() || 'AGENT', 256, 272);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createCeoTorsoTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  // Dark executive navy suit
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // White dress shirt V
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.moveTo(175, 0);
+  ctx.lineTo(256, 270);
+  ctx.lineTo(337, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Royal blue / gold silk tie
+  ctx.fillStyle = '#0284c7';
+  ctx.beginPath();
+  ctx.moveTo(238, 50);
+  ctx.lineTo(274, 50);
+  ctx.lineTo(282, 330);
+  ctx.lineTo(256, 365);
+  ctx.lineTo(230, 330);
+  ctx.closePath();
+  ctx.fill();
+
+  // Gold tie clip
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(234, 180, 44, 8);
+
+  // Suit lapels
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 14;
+  ctx.beginPath();
+  ctx.moveTo(165, 0);
+  ctx.lineTo(256, 300);
+  ctx.lineTo(347, 0);
+  ctx.stroke();
+
+  // Gold pocket square
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(350, 200, 40, 10);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createCeoScreenTexture(maxAnisotropy: number): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#050b14';
+  ctx.fillRect(0, 0, 1024, 512);
+
+  // Top header bar
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 1024, 52);
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = 'bold 24px "JetBrains Mono", monospace';
+  ctx.fillText('⚡ FLOWCLIC AI · DIRECCIÓN GENERAL (CEO EXECUTIVE DASHBOARD)', 30, 35);
+
+  // Metric cards
+  const metrics = [
+    { label: 'AGENTES ACTIVOS', val: '4 / 4 OK', col: '#10b981' },
+    { label: 'THROUGHPUT IA', val: '99.8% PREC.', col: '#38bdf8' },
+    { label: 'APROBACIONES CEO', val: 'COMPUERTAS 1-4', col: '#fbbf24' },
+    { label: 'PRESUPUESTO HOY', val: '$24.50 / $100', col: '#a855f7' },
+  ];
+  metrics.forEach((m, idx) => {
+    const x = 30 + idx * 242;
+    ctx.fillStyle = '#0a1220';
+    ctx.fillRect(x, 75, 225, 95);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, 75, 225, 95);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '14px monospace';
+    ctx.fillText(m.label, x + 16, 105);
+    ctx.fillStyle = m.col;
+    ctx.font = 'bold 22px monospace';
+    ctx.fillText(m.val, x + 16, 145);
+  });
+
+  // Large performance graph
+  ctx.fillStyle = '#0a1220';
+  ctx.fillRect(30, 195, 950, 280);
+  ctx.strokeStyle = '#1e293b';
+  ctx.strokeRect(30, 195, 950, 280);
+
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  for (let i = 0; i < 30; i++) {
+    const gx = 50 + i * 31;
+    const gy = 400 - Math.sin(i * 0.4) * 60 - Math.cos(i * 0.8) * 35;
+    if (i === 0) ctx.moveTo(gx, gy);
+    else ctx.lineTo(gx, gy);
+  }
+  ctx.stroke();
 
   return finalizeColorTexture(canvas, maxAnisotropy);
 }

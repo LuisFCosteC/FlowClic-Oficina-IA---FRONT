@@ -21,10 +21,12 @@ import { Agent, AgentStatus } from '../types/orbis';
 
 export type CameraPresetKey =
   | 'overview'
+  | 'oficina_ceo'
   | 'laboratorio'
   | 'oficina_sheldon'
   | 'oficina_senior'
   | 'sala_juntas'
+  | 'datacenter'
   | 'zona_descanso';
 
 interface StatusSummaryDto {
@@ -449,6 +451,17 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
             </button>
             <button
               type="button"
+              onClick={() => onFlyToPreset('oficina_ceo')}
+              className={`rounded-xl px-2 py-1.5 text-[11px] font-medium transition-all ${
+                activePreset === 'oficina_ceo'
+                  ? 'border border-amber-500/50 bg-amber-500/20 text-amber-200 shadow-sm'
+                  : 'border border-slate-800 bg-slate-900/80 text-amber-300 hover:bg-slate-800'
+              }`}
+            >
+              Oficina CEO
+            </button>
+            <button
+              type="button"
               onClick={() => onFlyToPreset('laboratorio')}
               className={`rounded-xl px-2 py-1.5 text-[11px] font-medium transition-all ${
                 activePreset === 'laboratorio'
@@ -490,6 +503,17 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
               }`}
             >
               Sala de juntas
+            </button>
+            <button
+              type="button"
+              onClick={() => onFlyToPreset('datacenter')}
+              className={`rounded-xl px-2 py-1.5 text-[11px] font-medium transition-all ${
+                activePreset === 'datacenter'
+                  ? 'border border-cyan-500/50 bg-cyan-500/20 text-cyan-200 shadow-sm'
+                  : 'border border-slate-800 bg-slate-900/80 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              Data Center
             </button>
             <button
               type="button"

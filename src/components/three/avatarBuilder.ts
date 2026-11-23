@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { Agent, AgentStatus } from '../../types/orbis';
+import {
+  createAgentLegoTorsoTexture,
+  createCeoTorsoTexture,
+  createFlashTorsoTexture,
+  createLegoFaceTexture,
+} from './proceduralTextures';
 
 export interface AvatarRig {
   agentId: string;
@@ -40,7 +46,7 @@ export function createAvatarRig(
   root.rotation.y = initialYaw;
 
   // Ground contact shadow
-  const shadowGeo = new THREE.PlaneGeometry(1.15, 1.15);
+  const shadowGeo = new THREE.PlaneGeometry(1.2, 1.2);
   const shadowMat = new THREE.MeshBasicMaterial({
     map: contactShadowTex,
     transparent: true,
@@ -81,216 +87,289 @@ export function createAvatarRig(
   selectRing.visible = false;
   root.add(selectRing);
 
-  // Articulated body container
+  // Articulated LEGO body container
   const bodyGroup = new THREE.Group();
   root.add(bodyGroup);
 
-  // Shared materials with varied roughness/metalness
-  const accentColor = new THREE.Color(agent.color);
-  const jacketMat = new THREE.MeshStandardMaterial({
-    color: accentColor,
-    roughness: 0.68,
-    metalness: 0.08,
-  });
-  const pantsMat = new THREE.MeshStandardMaterial({
-    color: 0x1e293b,
-    roughness: 0.82,
+  // Tonalidades de piel LEGO y materiales
+  const isSheldon = agent.id === 'sheldon' || agent.isCTO;
+  const skinTones = ['#f5d061', '#fcd34d', '#eab308', '#fde047'];
+  const skinToneHex = isSheldon
+    ? '#fcd34d'
+    : skinTones[
+        agent.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % skinTones.length
+      ];
+
+  const skinMat = new THREE.MeshStandardMaterial({
+    color: skinToneHex,
+    roughness: 0.3,
     metalness: 0.05,
   });
+
+  const pantsMat = new THREE.MeshStandardMaterial({
+    color: isSheldon ? 0x22354a : 0x1e293b,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+
   const shoeMat = new THREE.MeshStandardMaterial({
     color: 0x0f172a,
-    roughness: 0.4,
-    metalness: 0.25,
-  });
-  const skinTones = [0xf1c7a5, 0xe2b18c, 0xc88d65, 0xf5d4ba, 0x9c6b49];
-  const skinIndex =
-    agent.id === 'raj'
-      ? 4
-      : agent.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) %
-        skinTones.length;
-  const skinMat = new THREE.MeshStandardMaterial({
-    color: skinTones[skinIndex],
-    roughness: 0.65,
-    metalness: 0.02,
-  });
-  const hairColors = [0x1c1917, 0x3b2618, 0x5c3c24, 0xd4a259, 0x4b5563];
-  const hairColor =
-    agent.id === 'penny' || agent.id === 'bernadette'
-      ? 0xd9b25f
-      : agent.id === 'beverly'
-        ? 0x94a3b8
-        : hairColors[
-            agent.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) %
-              3
-          ];
-  const hairMat = new THREE.MeshStandardMaterial({
-    color: hairColor,
-    roughness: 0.78,
-    metalness: 0.05,
+    roughness: 0.3,
+    metalness: 0.2,
   });
 
-  // Legs (articulated at hip y = 0.56)
-  const buildLeg = (xOffset: number) => {
+  // Pelvis / cintura LEGO (punto de unión de piernas y torso)
+  const pelvisGeo = new THREE.BoxGeometry(0.38, 0.12, 0.22);
+  const pelvis = new THREE.Mesh(pelvisGeo, pantsMat);
+  pelvis.position.y = 0.54;
+  pelvis.castShadow = true;
+  bodyGroup.add(pelvis);
+
+  // Piernas articuladas en la cadera (y = 0.54)
+  const buildLegoLeg = (xOffset: number) => {
     const pivot = new THREE.Group();
-    pivot.position.set(xOffset, 0.56, 0);
+    pivot.position.set(xOffset, 0.54, 0);
 
+    // Pierna rectangular LEGO
     const legMesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.085, 0.34, 6, 10),
+      new THREE.BoxGeometry(0.17, 0.38, 0.2),
       pantsMat
     );
-    legMesh.position.y = -0.24;
+    legMesh.position.y = -0.19;
     legMesh.castShadow = true;
     pivot.add(legMesh);
 
+    // Zapato / base del pie LEGO
     const shoeMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.1, 0.26),
+      new THREE.BoxGeometry(0.17, 0.08, 0.25),
       shoeMat
     );
-    shoeMesh.position.set(0, -0.51, 0.04);
+    shoeMesh.position.set(0, -0.38, 0.025);
     shoeMesh.castShadow = true;
     pivot.add(shoeMesh);
 
     return pivot;
   };
 
-  const leftLegPivot = buildLeg(-0.12);
-  const rightLegPivot = buildLeg(0.12);
+  const leftLegPivot = buildLegoLeg(-0.1);
+  const rightLegPivot = buildLegoLeg(0.1);
   bodyGroup.add(leftLegPivot, rightLegPivot);
 
-  // Torso (primary silhouette + collar/badge detail)
-  const torso = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.21, 0.25, 0.58, 14),
-    jacketMat
-  );
-  torso.position.y = 0.87;
+  // Torso Trapezoidal LEGO
+  // Medidas clásicas LEGO: base inferior más ancha que hombros
+  const torsoGeo = new THREE.CylinderGeometry(0.18, 0.25, 0.48, 4, 1);
+  torsoGeo.rotateY(Math.PI / 4); // Alinear caras frontal y posterior
+  torsoGeo.scale(1.2, 1, 0.72); // Silueta proporcionada LEGO
+
+  // Textura frontal procedural: Flash para Sheldon, Camisa tech para agentes
+  const torsoFrontTex = isSheldon
+    ? createFlashTorsoTexture()
+    : createAgentLegoTorsoTexture(agent.color, agent.name);
+
+  const torsoMatSide = new THREE.MeshStandardMaterial({
+    color: isSheldon ? 0xd92525 : new THREE.Color(agent.color),
+    roughness: 0.32,
+    metalness: 0.08,
+  });
+
+  const torsoMatFront = new THREE.MeshStandardMaterial({
+    map: torsoFrontTex,
+    roughness: 0.32,
+    metalness: 0.08,
+  });
+
+  // Asignar materiales con la cara frontal texturizada
+  const torsoMaterials = [
+    torsoMatSide,
+    torsoMatSide,
+    torsoMatSide,
+    torsoMatSide,
+    torsoMatSide,
+    torsoMatFront,
+  ];
+
+  const torso = new THREE.Mesh(torsoGeo, torsoMaterials);
+  torso.position.y = 0.84;
   torso.castShadow = true;
   torso.receiveShadow = true;
   bodyGroup.add(torso);
 
-  // Shirt collar / emblem detail
-  const collarMat = new THREE.MeshStandardMaterial({
-    color: agent.isCTO ? 0xfef08a : 0xe2e8f0,
-    roughness: 0.45,
-    metalness: 0.2,
-  });
-  const collar = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.13, 0.16, 0.09, 12),
-    collarMat
-  );
-  collar.position.y = 1.15;
-  bodyGroup.add(collar);
+  // Cuello cilíndrico LEGO
+  const neckGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.09, 16);
+  const neck = new THREE.Mesh(neckGeo, skinMat);
+  neck.position.y = 1.11;
+  bodyGroup.add(neck);
 
-  // Tech badge / lanyard on chest
-  const badgeMat = new THREE.MeshStandardMaterial({
-    color: agent.isCTO ? 0xf59e0b : 0x06b6d4,
-    emissive: agent.isCTO ? 0xf59e0b : 0x06b6d4,
-    emissiveIntensity: 0.55,
-    roughness: 0.2,
-    metalness: 0.7,
-  });
-  const badge = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.03), badgeMat);
-  badge.position.set(0.08, 0.94, 0.22);
-  bodyGroup.add(badge);
-
-  // Articulated Arms (pivoted at shoulder y = 1.10)
-  const buildArm = (xOffset: number) => {
+  // Brazos articulados estilo LEGO (en hombros y = 1.05)
+  const buildLegoArm = (isLeft: boolean) => {
     const pivot = new THREE.Group();
-    pivot.position.set(xOffset, 1.1, 0);
+    const xOffset = isLeft ? -0.27 : 0.27;
+    pivot.position.set(xOffset, 1.05, 0);
 
-    const sleeve = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.068, 0.34, 6, 10),
-      jacketMat
+    const armColor = isSheldon ? 0xd92525 : new THREE.Color(agent.color);
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: armColor,
+      roughness: 0.35,
+      metalness: 0.05,
+    });
+
+    // Brazo superior / manga
+    const upperArm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.065, 0.065, 0.24, 12),
+      sleeveMat
     );
-    sleeve.position.y = -0.22;
-    sleeve.castShadow = true;
-    pivot.add(sleeve);
+    upperArm.position.set(0, -0.11, 0);
+    upperArm.rotation.z = isLeft ? 0.15 : -0.15;
+    upperArm.castShadow = true;
+    pivot.add(upperArm);
 
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), skinMat);
-    hand.position.y = -0.44;
-    pivot.add(hand);
+    // Antebrazo inclinado hacia el frente
+    const forearm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.058, 0.058, 0.16, 12),
+      isSheldon
+        ? new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.35 })
+        : sleeveMat
+    );
+    forearm.position.set(0, -0.26, 0.04);
+    forearm.rotation.x = 0.32;
+    forearm.castShadow = true;
+    pivot.add(forearm);
 
+    // Mano Pinza LEGO clásica en forma de C (Torus abierto)
+    const handGroup = new THREE.Group();
+    handGroup.position.set(0, -0.37, 0.08);
+
+    const handGeo = new THREE.TorusGeometry(0.054, 0.019, 10, 20, Math.PI * 1.5);
+    const handMesh = new THREE.Mesh(handGeo, skinMat);
+    handMesh.rotation.z = Math.PI / 2;
+    handMesh.rotation.y = isLeft ? Math.PI / 2 : -Math.PI / 2;
+    handGroup.add(handMesh);
+
+    // Muñeca de anclaje
+    const wrist = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.038, 0.038, 0.04, 12),
+      skinMat
+    );
+    wrist.position.y = 0.025;
+    handGroup.add(wrist);
+
+    pivot.add(handGroup);
     return pivot;
   };
 
-  const leftArmPivot = buildArm(-0.28);
-  const rightArmPivot = buildArm(0.28);
+  const leftArmPivot = buildLegoArm(true);
+  const rightArmPivot = buildLegoArm(false);
   bodyGroup.add(leftArmPivot, rightArmPivot);
 
-  // Head Group
+  // Cabeza Cilíndrica LEGO con Stud Superior y Rostro Procedural
   const headGroup = new THREE.Group();
-  headGroup.position.y = 1.24;
+  headGroup.position.y = 1.15;
   bodyGroup.add(headGroup);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 16, 14), skinMat);
-  head.position.y = 0.19;
-  head.castShadow = true;
-  headGroup.add(head);
-
-  // Eyes
-  const eyeMat = new THREE.MeshStandardMaterial({
-    color: 0x0f172a,
-    roughness: 0.2,
-    metalness: 0.3,
+  const headFaceTex = createLegoFaceTexture(skinToneHex, isSheldon);
+  const headSideMat = new THREE.MeshStandardMaterial({
+    color: skinToneHex,
+    roughness: 0.3,
+    metalness: 0.02,
   });
-  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 8), eyeMat);
-  leftEye.position.set(-0.07, 0.21, 0.185);
-  const rightEye = leftEye.clone();
-  rightEye.position.x = 0.07;
-  headGroup.add(leftEye, rightEye);
+  const headFaceMat = new THREE.MeshStandardMaterial({
+    map: headFaceTex,
+    roughness: 0.3,
+    metalness: 0.02,
+  });
 
-  // Optional Glasses
-  if (agent.glasses) {
-    const frameMat = new THREE.MeshStandardMaterial({
-      color: 0x0f172a,
-      roughness: 0.25,
-      metalness: 0.75,
-    });
-    const leftLens = new THREE.Mesh(
-      new THREE.TorusGeometry(0.052, 0.011, 8, 16),
-      frameMat
-    );
-    leftLens.position.set(-0.072, 0.21, 0.2);
-    const rightLens = leftLens.clone();
-    rightLens.position.x = 0.072;
-    const bridge = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.012, 0.012),
-      frameMat
-    );
-    bridge.position.set(0, 0.21, 0.205);
-    headGroup.add(leftLens, rightLens, bridge);
-  }
+  // Cabeza cilíndrica con bordes biselados
+  const headCylGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.28, 24);
+  const headMaterials = [headFaceMat, headSideMat, headSideMat];
+  const headMesh = new THREE.Mesh(headCylGeo, headMaterials);
+  headMesh.position.y = 0.16;
+  headMesh.rotation.y = -Math.PI / 2; // Cara mirando al frente
+  headMesh.castShadow = true;
+  headGroup.add(headMesh);
 
-  // Hair styles
-  const style = agent.hairStyle ?? 'short';
+  // Stud Superior LEGO (pivote clásico encima de la cabeza)
+  const studGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.06, 16);
+  const studMesh = new THREE.Mesh(studGeo, headSideMat);
+  studMesh.position.y = 0.32;
+  studMesh.castShadow = true;
+  headGroup.add(studMesh);
+
+  // Cabello / Peinado LEGO
+  const hairColors = [0x1c1917, 0x3b2618, 0x5c3c24, 0xd4a259, 0x4b5563];
+  const hairColor = isSheldon
+    ? 0x3b2618
+    : agent.id === 'penny' || agent.id === 'bernadette'
+      ? 0xd9b25f
+      : agent.id === 'beverly'
+        ? 0x94a3b8
+        : hairColors[
+            agent.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 3
+          ];
+  const hairMat = new THREE.MeshStandardMaterial({
+    color: hairColor,
+    roughness: 0.45,
+    metalness: 0.1,
+  });
+
+  const style = agent.hairStyle ?? (isSheldon ? 'parted' : 'short');
   const hairCap = new THREE.Mesh(
-    new THREE.SphereGeometry(0.222, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56),
+    new THREE.SphereGeometry(0.2, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
     hairMat
   );
-  hairCap.position.y = 0.205;
+  hairCap.position.y = 0.24;
+  hairCap.scale.set(1.05, 0.85, 1.05);
   hairCap.castShadow = true;
   headGroup.add(hairCap);
 
-  if (style === 'long') {
+  if (style === 'parted' || isSheldon) {
+    // Flequillo lateral icónico
+    const bang = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.06), hairMat);
+    bang.position.set(-0.06, 0.28, 0.14);
+    bang.rotation.z = -0.15;
+    headGroup.add(bang);
+  } else if (style === 'long') {
     const backHair = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.3, 0.16),
+      new THREE.BoxGeometry(0.32, 0.32, 0.14),
       hairMat
     );
-    backHair.position.set(0, 0.08, -0.13);
+    backHair.position.set(0, 0.12, -0.12);
     headGroup.add(backHair);
   } else if (style === 'bun') {
-    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 10), hairMat);
-    bun.position.set(0, 0.34, -0.15);
+    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 12), hairMat);
+    bun.position.set(0, 0.36, -0.12);
     headGroup.add(bun);
   } else if (style === 'curly') {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.23, 12, 10), hairMat);
-    puff.scale.set(1.06, 0.85, 1.06);
-    puff.position.set(0, 0.24, -0.02);
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.21, 12, 10), hairMat);
+    puff.scale.set(1.08, 0.9, 1.08);
+    puff.position.set(0, 0.25, -0.01);
     headGroup.add(puff);
   }
 
-  // Battery status icon (procedural low-battery indicator for SLEEP_QUOTA)
+  // Gafas opcionales (Leonard, Amy, etc.)
+  if (agent.glasses) {
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      roughness: 0.2,
+      metalness: 0.8,
+    });
+    const leftLens = new THREE.Mesh(
+      new THREE.TorusGeometry(0.048, 0.01, 8, 16),
+      frameMat
+    );
+    leftLens.position.set(-0.065, 0.18, 0.185);
+    const rightLens = leftLens.clone();
+    rightLens.position.x = 0.065;
+    const bridge = new THREE.Mesh(
+      new THREE.BoxGeometry(0.045, 0.01, 0.01),
+      frameMat
+    );
+    bridge.position.set(0, 0.18, 0.19);
+    headGroup.add(leftLens, rightLens, bridge);
+  }
+
+  // Indicador de batería baja procedural para SLEEP_QUOTA
   const batteryIcon = new THREE.Group();
-  batteryIcon.position.set(0, 2.02, 0);
+  batteryIcon.position.set(0, 2.05, 0);
 
   const batteryFrameMat = new THREE.MeshStandardMaterial({
     color: 0x475569,
@@ -323,7 +402,7 @@ export function createAvatarRig(
   batteryIcon.visible = agent.status === 'sleep_quota';
   root.add(batteryIcon);
 
-  // Invisible hit proxy for smooth raycasting (Layer 1)
+  // Invisible hit proxy para raycasting y selección suave
   const hitProxy = new THREE.Mesh(
     new THREE.CylinderGeometry(0.45, 0.45, 1.75, 10),
     new THREE.MeshBasicMaterial({ visible: false })
@@ -352,6 +431,207 @@ export function createAvatarRig(
     targetYaw: initialYaw,
     labelAnchorY: 1.88,
   };
+}
+
+/**
+ * Construye la figura emblemática del CEO estilo minifigura LEGO presidencial.
+ * Sentado tras su escritorio monumental o de pie como autoridad máxima.
+ */
+export function buildCeoFigure(isSeated = true): THREE.Group {
+  const root = new THREE.Group();
+
+  const skinMat = new THREE.MeshStandardMaterial({
+    color: 0xfcd34d, // LEGO Yellow
+    roughness: 0.3,
+    metalness: 0.05,
+  });
+
+  const suitPantsMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a, // Carbón ejecutivo
+    roughness: 0.4,
+    metalness: 0.15,
+  });
+
+  const shoeMat = new THREE.MeshStandardMaterial({
+    color: 0x020617,
+    roughness: 0.25,
+    metalness: 0.4,
+  });
+
+  const bodyGroup = new THREE.Group();
+  root.add(bodyGroup);
+
+  // Pelvis LEGO
+  const pelvis = new THREE.Mesh(
+    new THREE.BoxGeometry(0.4, 0.13, 0.24),
+    suitPantsMat
+  );
+  pelvis.position.y = isSeated ? 0.48 : 0.54;
+  pelvis.castShadow = true;
+  bodyGroup.add(pelvis);
+
+  // Piernas
+  const buildCeoLeg = (xOffset: number) => {
+    const legGroup = new THREE.Group();
+    legGroup.position.set(xOffset, isSeated ? 0.48 : 0.54, 0);
+
+    const legMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.38, 0.22),
+      suitPantsMat
+    );
+    legMesh.position.y = -0.19;
+    legMesh.castShadow = true;
+    legGroup.add(legMesh);
+
+    const shoe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.08, 0.26),
+      shoeMat
+    );
+    shoe.position.set(0, -0.38, 0.025);
+    shoe.castShadow = true;
+    legGroup.add(shoe);
+
+    if (isSeated) {
+      legGroup.rotation.x = -Math.PI / 2; // Sentado en el sillón presidencial
+    }
+    return legGroup;
+  };
+
+  bodyGroup.add(buildCeoLeg(-0.11));
+  bodyGroup.add(buildCeoLeg(0.11));
+
+  // Torso Ejecutivo del CEO con textura de traje, camisa, corbata azul y pañuelo
+  const torsoGeo = new THREE.CylinderGeometry(0.19, 0.26, 0.5, 4, 1);
+  torsoGeo.rotateY(Math.PI / 4);
+  torsoGeo.scale(1.22, 1, 0.74);
+
+  const torsoTex = createCeoTorsoTexture();
+  const suitSideMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+  const suitFrontMat = new THREE.MeshStandardMaterial({
+    map: torsoTex,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+
+  const torsoMaterials = [
+    suitSideMat,
+    suitSideMat,
+    suitSideMat,
+    suitSideMat,
+    suitSideMat,
+    suitFrontMat,
+  ];
+
+  const torso = new THREE.Mesh(torsoGeo, torsoMaterials);
+  torso.position.y = isSeated ? 0.79 : 0.85;
+  torso.castShadow = true;
+  bodyGroup.add(torso);
+
+  // Cuello
+  const neck = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.09, 0.09, 0.09, 16),
+    skinMat
+  );
+  neck.position.y = isSeated ? 1.06 : 1.12;
+  bodyGroup.add(neck);
+
+  // Brazos del CEO (apoyados en reposabrazos o mesa)
+  const buildCeoArm = (isLeft: boolean) => {
+    const armGroup = new THREE.Group();
+    const xOffset = isLeft ? -0.29 : 0.29;
+    armGroup.position.set(xOffset, isSeated ? 1.0 : 1.06, 0);
+
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      roughness: 0.35,
+      metalness: 0.1,
+    });
+
+    const arm = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.068, 0.068, 0.34, 12),
+      sleeveMat
+    );
+    arm.position.set(0, -0.16, 0.06);
+    arm.rotation.x = isSeated ? 0.65 : 0.15;
+    arm.rotation.z = isLeft ? 0.12 : -0.12;
+    arm.castShadow = true;
+    armGroup.add(arm);
+
+    // Pinza de mano LEGO dorada/piel
+    const handGroup = new THREE.Group();
+    handGroup.position.set(0, -0.32, isSeated ? 0.18 : 0.08);
+
+    const handGeo = new THREE.TorusGeometry(0.054, 0.019, 10, 20, Math.PI * 1.5);
+    const hand = new THREE.Mesh(handGeo, skinMat);
+    hand.rotation.z = Math.PI / 2;
+    hand.rotation.y = isLeft ? Math.PI / 2 : -Math.PI / 2;
+    handGroup.add(hand);
+
+    armGroup.add(handGroup);
+    return armGroup;
+  };
+
+  bodyGroup.add(buildCeoArm(true));
+  bodyGroup.add(buildCeoArm(false));
+
+  // Cabeza Cilíndrica LEGO con Rostro Decidido del CEO
+  const headGroup = new THREE.Group();
+  headGroup.position.y = isSeated ? 1.1 : 1.16;
+  bodyGroup.add(headGroup);
+
+  const ceoFaceTex = createLegoFaceTexture('#fcd34d', false);
+  const headSideMat = new THREE.MeshStandardMaterial({
+    color: 0xfcd34d,
+    roughness: 0.3,
+  });
+  const headFaceMat = new THREE.MeshStandardMaterial({
+    map: ceoFaceTex,
+    roughness: 0.3,
+  });
+
+  const headMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.18, 0.28, 24),
+    [headFaceMat, headSideMat, headSideMat]
+  );
+  headMesh.position.y = 0.16;
+  headMesh.rotation.y = -Math.PI / 2;
+  headMesh.castShadow = true;
+  headGroup.add(headMesh);
+
+  // Stud Superior LEGO
+  const stud = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 0.06, 16),
+    headSideMat
+  );
+  stud.position.y = 0.32;
+  headGroup.add(stud);
+
+  // Peinado Ejecutivo Estilo Boss
+  const hairMat = new THREE.MeshStandardMaterial({
+    color: 0x1f2937,
+    roughness: 0.5,
+  });
+  const hairCap = new THREE.Mesh(
+    new THREE.SphereGeometry(0.2, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    hairMat
+  );
+  hairCap.position.y = 0.25;
+  hairCap.scale.set(1.06, 0.86, 1.06);
+  hairCap.castShadow = true;
+  headGroup.add(hairCap);
+
+  const hairTop = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.09, 0.24),
+    hairMat
+  );
+  hairTop.position.set(0, 0.32, -0.02);
+  headGroup.add(hairTop);
+
+  return root;
 }
 
 export function setAvatarStatusColor(rig: AvatarRig, status: AgentStatus): void {

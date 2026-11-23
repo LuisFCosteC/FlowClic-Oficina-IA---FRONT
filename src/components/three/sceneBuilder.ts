@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   createBbtRugTexture,
+  createCeoScreenTexture,
   createLabFloorTexture,
   createMonitorScreenTexture,
   createServerRackTexture,
@@ -9,6 +10,7 @@ import {
   createTvScreenTexture,
   createWoodFloorTexture,
 } from './proceduralTextures';
+import { buildCeoFigure } from './avatarBuilder';
 
 export interface ZoneSlot {
   x: number;
@@ -119,6 +121,8 @@ export const DOORS = {
   junta: { x: 14.5, z: 0 },
   laboratorio: { x: -ROOM_CX, z: CORRIDOR_W / 2 },
   descanso: { x: ROOM_CX, z: CORRIDOR_W / 2 },
+  ceo: { x: -14.5, z: 0 },
+  datacenter: { x: 14.5, z: -10.5 },
 };
 
 /**
@@ -144,8 +148,21 @@ export function sheldonDetour(
   ];
 }
 
-// Sala de juntas (extensión al sur del pasillo central): una silla por agente.
+// Sala de juntas (extensión al este del pasillo central): una silla por agente.
 export const BOARDROOM = { cx: 21.5, cz: 0, w: 14, d: 9 };
+
+// Data Center (ala este, al norte de la Sala de Juntas)
+export const DATACENTER = { cx: 21.5, cz: -10.5, w: 14, d: 9 };
+
+// Oficina del CEO (ala oeste, la más grande de la oficina, a la izquierda de Sheldon y el Laboratorio)
+export const CEO_OFFICE = { cx: -23.5, cz: 0, w: 16, d: 27 };
+
+// Slots de visita frente al escritorio del CEO donde vienen Sheldon y Leonard a esperar aprobaciones
+export const CEO_VISITOR_SLOTS = {
+  chairSheldon: { x: -23.6, z: -1.25, yaw: -Math.PI / 2 } as ZoneSlot,
+  chairLeonard: { x: -23.6, z: 1.25, yaw: -Math.PI / 2 } as ZoneSlot,
+};
+
 const SEAT_SPACING = 1.15;
 export function boardroomLayout(n: number) {
   const perSide = Math.ceil(Math.max(0, n - 1) / 2);
@@ -228,6 +245,20 @@ export const ZONE_LABEL_ANCHORS = [
     subtitle: 'Reunión del equipo',
     pos: new THREE.Vector3(BOARDROOM.cx, 3.3, BOARDROOM.cz - BOARDROOM.d / 2 + 0.8),
     accent: '#38BDF8',
+  },
+  {
+    id: 'data-center',
+    title: 'DATA CENTER',
+    subtitle: 'Servidores & Cluster GPU',
+    pos: new THREE.Vector3(DATACENTER.cx, 3.3, DATACENTER.cz - DATACENTER.d / 2 + 0.8),
+    accent: '#06B6D4',
+  },
+  {
+    id: 'oficina-ceo',
+    title: 'OFICINA DEL CEO',
+    subtitle: 'Presidencia & Dirección General',
+    pos: new THREE.Vector3(CEO_OFFICE.cx, 3.8, CEO_OFFICE.cz - CEO_OFFICE.d / 2 + 0.8),
+    accent: '#F59E0B',
   },
   {
     id: 'zona-descanso',
@@ -2786,6 +2817,487 @@ export function buildColmenaOffice(
     });
   };
   setBoardroomSeats(0);
+
+  // =========================================================================
+  // DATA CENTER (Ala Este, adyacente a Sala de Juntas)
+  // =========================================================================
+  const dcGroup = new THREE.Group();
+  scene.add(dcGroup);
+
+  // Piso técnico elevado perforado con brillo azul
+  const dcFloorMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x07111e,
+      roughness: 0.28,
+      metalness: 0.85,
+    })
+  );
+  const dcFloor = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(DATACENTER.w, 0.24, DATACENTER.d)),
+    dcFloorMat
+  );
+  dcFloor.position.set(DATACENTER.cx, 0.12, DATACENTER.cz);
+  dcFloor.receiveShadow = true;
+  dcGroup.add(dcFloor);
+
+  // Franjas de ventilación perimetrales
+  const dcVentMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 0.6,
+      roughness: 0.2,
+    })
+  );
+  const dcVentN = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(DATACENTER.w - 1, 0.02, 0.12)), dcVentMat);
+  dcVentN.position.set(DATACENTER.cx, 0.25, DATACENTER.cz - DATACENTER.d / 2 + 0.3);
+  const dcVentS = dcVentN.clone();
+  dcVentS.position.z = DATACENTER.cz + DATACENTER.d / 2 - 0.3;
+  dcGroup.add(dcVentN, dcVentS);
+
+  // Paredes de cristal del Data Center
+  const dcW = DATACENTER.cx - DATACENTER.w / 2;
+  const dcE = DATACENTER.cx + DATACENTER.w / 2;
+  const dcN = DATACENTER.cz - DATACENTER.d / 2;
+  const dcS = DATACENTER.cz + DATACENTER.d / 2;
+  addGlassWall(dcW, dcN, dcW, DATACENTER.cz - 1.2);
+  addGlassWall(dcW, DATACENTER.cz + 1.2, dcW, dcS);
+  addGlassWall(dcW, dcN, dcE, dcN);
+  addGlassWall(dcW, dcS, dcE, dcS);
+  addGlassWall(dcE, dcN, dcE, dcS);
+
+  // Filas de Racks de Servidores de 42U con LEDs frontales
+  const rackTexture = createServerRackTexture(maxAnisotropy);
+  disposables.push(rackTexture);
+  const rackFrontMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      map: rackTexture,
+      emissiveMap: rackTexture,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.85,
+      roughness: 0.3,
+      metalness: 0.5,
+    })
+  );
+  const rackSideMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x0a0f18,
+      roughness: 0.4,
+      metalness: 0.8,
+    })
+  );
+  const rackMaterials = [rackSideMat, rackSideMat, rackSideMat, rackSideMat, rackFrontMat, rackSideMat];
+  const rackGeo = trackGeo(new THREE.BoxGeometry(1.0, 2.6, 1.1));
+
+  // 2 pasillos de racks paralelos
+  [-2.2, 2.2].forEach((rackZOffset) => {
+    [-4.5, -3.0, -1.5, 0, 1.5, 3.0, 4.5].forEach((rackXOffset) => {
+      const rack = new THREE.Mesh(rackGeo, rackMaterials);
+      rack.position.set(DATACENTER.cx + rackXOffset, 1.42, DATACENTER.cz + rackZOffset);
+      if (rackZOffset > 0) rack.rotation.y = Math.PI;
+      rack.castShadow = true;
+      rack.receiveShadow = true;
+      dcGroup.add(rack);
+
+      // Indicadores LED estatus en la parte superior
+      const ledPillMat = trackMat(
+        new THREE.MeshStandardMaterial({
+          color: Math.random() > 0.15 ? 0x10b981 : 0x00f0ff,
+          emissive: Math.random() > 0.15 ? 0x10b981 : 0x00f0ff,
+          emissiveIntensity: 1.2,
+        })
+      );
+      const ledPill = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8)), ledPillMat);
+      ledPill.position.set(DATACENTER.cx + rackXOffset, 2.76, DATACENTER.cz + rackZOffset + (rackZOffset > 0 ? -0.52 : 0.52));
+      dcGroup.add(ledPill);
+    });
+  });
+
+  // Ductos aéreos HVAC y bandejas de fibra óptica
+  const hvacMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.7 }));
+  const hvacPipe = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.24, 0.24, DATACENTER.w - 1, 16)),
+    hvacMat
+  );
+  hvacPipe.rotation.z = Math.PI / 2;
+  hvacPipe.position.set(DATACENTER.cx, 3.4, DATACENTER.cz);
+  dcGroup.add(hvacPipe);
+
+  // Rótulo luminoso "DATA CENTER" en pared este
+  const dcScreenCt = makeCanvasTex(1024, 400);
+  {
+    const g = dcScreenCt.ctx;
+    g.fillStyle = '#050b14';
+    g.fillRect(0, 0, 1024, 400);
+    g.fillStyle = '#00f0ff';
+    g.fillRect(0, 0, 1024, 12);
+    g.textAlign = 'center';
+    g.fillStyle = '#f8fafc';
+    g.font = 'bold 84px sans-serif';
+    g.fillText('DATA CENTER', 512, 190);
+    g.fillStyle = '#00f0ff';
+    g.font = '38px monospace';
+    g.fillText('CLUSTER GPU · 128 NODES · 99.99% UPTIME', 512, 270);
+    dcScreenCt.tex.needsUpdate = true;
+  }
+  const dcSign = new THREE.Mesh(
+    trackGeo(new THREE.PlaneGeometry(4.2, 1.64)),
+    trackMat(
+      new THREE.MeshStandardMaterial({
+        map: dcScreenCt.tex,
+        emissiveMap: dcScreenCt.tex,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.8,
+      })
+    )
+  );
+  dcSign.position.set(DATACENTER.cx + DATACENTER.w / 2 - 0.12, 2.3, DATACENTER.cz);
+  dcSign.rotation.y = -Math.PI / 2;
+  dcGroup.add(dcSign);
+
+  // Iluminación fría de Data Center
+  const dcLight = new THREE.PointLight(0x00f0ff, 18, 20, 1.4);
+  dcLight.position.set(DATACENTER.cx, 3.8, DATACENTER.cz);
+  dcGroup.add(dcLight);
+
+  // =========================================================================
+  // OFICINA DEL CEO (Presidencia - El Despacho más Grande de la Oficina)
+  // Ubicada al oeste de Sheldon y el Laboratorio (cx: -23.5, cz: 0, w: 16, d: 27)
+  // =========================================================================
+  const ceoGroup = new THREE.Group();
+  scene.add(ceoGroup);
+
+  // Piso premium de nogal con textura de madera oscura
+  const woodFloorTex = createWoodFloorTexture(maxAnisotropy, 8, 12);
+  disposables.push(woodFloorTex);
+  const ceoFloorMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      map: woodFloorTex,
+      roughness: 0.38,
+      metalness: 0.08,
+    })
+  );
+  const ceoFloor = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(CEO_OFFICE.w, 0.2, CEO_OFFICE.d)),
+    ceoFloorMat
+  );
+  ceoFloor.position.set(CEO_OFFICE.cx, 0.1, CEO_OFFICE.cz);
+  ceoFloor.receiveShadow = true;
+  ceoGroup.add(ceoFloor);
+
+  // Gran alfombra ejecutiva persa / geométrica bajo el área presidencial
+  const ceoRugMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x1e1b4b,
+      roughness: 0.88,
+      metalness: 0.02,
+    })
+  );
+  const ceoRug = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(9.0, 0.02, 7.5)),
+    ceoRugMat
+  );
+  ceoRug.position.set(CEO_OFFICE.cx - 2.5, 0.21, CEO_OFFICE.cz);
+  ceoRug.receiveShadow = true;
+  ceoGroup.add(ceoRug);
+
+  // Paredes perimetrales y puertas de cristal hacia el pasillo
+  const ceoW = CEO_OFFICE.cx - CEO_OFFICE.w / 2;
+  const ceoE = CEO_OFFICE.cx + CEO_OFFICE.w / 2;
+  const ceoN = CEO_OFFICE.cz - CEO_OFFICE.d / 2;
+  const ceoS = CEO_OFFICE.cz + CEO_OFFICE.d / 2;
+  addGlassWall(ceoE, ceoN, ceoE, CEO_OFFICE.cz - 1.5);
+  addGlassWall(ceoE, CEO_OFFICE.cz + 1.5, ceoE, ceoS);
+  addGlassWall(ceoW, ceoN, ceoE, ceoN);
+  addGlassWall(ceoW, ceoS, ceoE, ceoS);
+  addGlassWall(ceoW, ceoN, ceoW, ceoS);
+
+  // Escritorio del CEO: 2 VECES MÁS GRANDE que los de Sheldon y Leonard (4.4m x 2.0m)
+  const deskMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x271911, // Madera noble de caoba profunda
+      roughness: 0.22,
+      metalness: 0.12,
+    })
+  );
+  const ceoDeskTop = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(2.0, 0.14, 4.4)), // Ancho en Z, Fondo en X
+    deskMat
+  );
+  ceoDeskTop.position.set(CEO_OFFICE.cx - 3.8, 0.82, CEO_OFFICE.cz);
+  ceoDeskTop.castShadow = true;
+  ceoDeskTop.receiveShadow = true;
+  ceoGroup.add(ceoDeskTop);
+
+  // Patas monolíticas en aluminio oscuro pulido con acentos dorados
+  const ceoLegMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      roughness: 0.25,
+      metalness: 0.85,
+    })
+  );
+  [-1.9, 1.9].forEach((zOff) => {
+    const leg = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.8, 0.75, 0.16)), ceoLegMat);
+    leg.position.set(CEO_OFFICE.cx - 3.8, 0.38, CEO_OFFICE.cz + zOff);
+    leg.castShadow = true;
+    ceoGroup.add(leg);
+  });
+
+  // Tapete frontal de cuero negro con inserto de latón
+  const deskPadMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 }));
+  const deskPad = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.9, 0.015, 1.8)), deskPadMat);
+  deskPad.position.set(CEO_OFFICE.cx - 3.6, 0.9, CEO_OFFICE.cz);
+  ceoGroup.add(deskPad);
+
+  // Doble Monitor Ultrawide Curvo con el Dashboard Ejecutivo del CEO
+  const ceoScreenTex = createCeoScreenTexture(maxAnisotropy);
+  disposables.push(ceoScreenTex);
+  const ultrawideMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      map: ceoScreenTex,
+      emissiveMap: ceoScreenTex,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.9,
+      roughness: 0.2,
+      metalness: 0.3,
+    })
+  );
+  const monitorBackMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.3 }));
+
+  const ultrawideScreen = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(2.8, 2.8, 0.8, 24, 1, true, Math.PI * 0.88, Math.PI * 0.24)),
+    ultrawideMat
+  );
+  ultrawideScreen.position.set(CEO_OFFICE.cx - 3.2, 1.42, CEO_OFFICE.cz);
+  ultrawideScreen.rotation.y = -Math.PI / 2;
+  ceoGroup.add(ultrawideScreen);
+
+  const monitorStand = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.06, 0.08, 0.6, 12)),
+    brushedAlumMat
+  );
+  monitorStand.position.set(CEO_OFFICE.cx - 4.1, 1.15, CEO_OFFICE.cz);
+  const monitorBase = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.3, 0.04, 0.7)),
+    darkMetalMat
+  );
+  monitorBase.position.set(CEO_OFFICE.cx - 4.0, 0.9, CEO_OFFICE.cz);
+  ceoGroup.add(monitorStand, monitorBase);
+
+  // Sillón Presidencial de Cuero Negro del CEO tras el escritorio
+  const chairLeatherMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x090d16,
+      roughness: 0.45,
+      metalness: 0.1,
+    })
+  );
+  const ceoChair = new THREE.Group();
+  ceoChair.position.set(CEO_OFFICE.cx - 5.0, 0, CEO_OFFICE.cz);
+  ceoChair.rotation.y = Math.PI / 2; // Mirando hacia el frente / pasillo
+
+  const chairSeat = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.72, 0.12, 0.68)), chairLeatherMat);
+  chairSeat.position.y = 0.48;
+  const chairBack = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.7, 0.95, 0.14)), chairLeatherMat);
+  chairBack.position.set(0, 0.95, -0.28);
+  const chairHead = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.48, 0.22, 0.12)), chairLeatherMat);
+  chairHead.position.set(0, 1.48, -0.28);
+  const chairStem = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.05, 0.06, 0.4, 12)), brushedAlumMat);
+  chairStem.position.y = 0.24;
+  const chairBase = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.38, 0.38, 0.05, 8)), darkMetalMat);
+  chairBase.position.y = 0.04;
+  ceoChair.add(chairSeat, chairBack, chairHead, chairStem, chairBase);
+  ceoGroup.add(ceoChair);
+
+  // Ubicar al PERSONAJE DEL CEO en su sillón presidencial
+  const ceoFigure = buildCeoFigure(true);
+  ceoFigure.position.set(CEO_OFFICE.cx - 4.95, 0, CEO_OFFICE.cz);
+  ceoFigure.rotation.y = Math.PI / 2; // Mirando hacia el escritorio y los visitantes
+  ceoGroup.add(ceoFigure);
+
+  // 2 SILLAS DE VISITA EJECUTIVAS frente al escritorio (para Sheldon y Leonard)
+  const visitorChairMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      roughness: 0.5,
+      metalness: 0.2,
+    })
+  );
+  const buildVisitorChair = (x: number, z: number, yaw: number) => {
+    const chair = new THREE.Group();
+    chair.position.set(x, 0, z);
+    chair.rotation.y = yaw;
+    const s = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.62, 0.09, 0.6)), visitorChairMat);
+    s.position.y = 0.45;
+    const b = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.58, 0.68, 0.09)), visitorChairMat);
+    b.position.set(0, 0.8, -0.26);
+    const leg1 = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.03, 0.03, 0.42, 8)), brushedAlumMat);
+    leg1.position.set(-0.25, 0.22, -0.22);
+    const leg2 = leg1.clone();
+    leg2.position.x = 0.25;
+    const leg3 = leg1.clone();
+    leg3.position.set(-0.25, 0.22, 0.22);
+    const leg4 = leg1.clone();
+    leg4.position.set(0.25, 0.22, 0.22);
+    chair.add(s, b, leg1, leg2, leg3, leg4);
+    return chair;
+  };
+  const chair1 = buildVisitorChair(CEO_VISITOR_SLOTS.chairSheldon.x, CEO_VISITOR_SLOTS.chairSheldon.z, CEO_VISITOR_SLOTS.chairSheldon.yaw);
+  const chair2 = buildVisitorChair(CEO_VISITOR_SLOTS.chairLeonard.x, CEO_VISITOR_SLOTS.chairLeonard.z, CEO_VISITOR_SLOTS.chairLeonard.yaw);
+  ceoGroup.add(chair1, chair2);
+
+  // Libreros grandes de caoba con libros encuadernados
+  const bookcaseMat = trackMat(new THREE.MeshStandardMaterial({ color: 0x331c12, roughness: 0.35 }));
+  const bookColors = [0x991b1b, 0x1e3a8a, 0x14532d, 0x78350f, 0x312e81];
+  [-8.0, 8.0].forEach((zPos) => {
+    const bookcase = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.2, 3.4, 4.2)), bookcaseMat);
+    bookcase.position.set(CEO_OFFICE.cx - 6.8, 1.8, CEO_OFFICE.cz + zPos);
+    bookcase.castShadow = true;
+    ceoGroup.add(bookcase);
+
+    // Baldas con libros
+    for (let row = 0; row < 4; row++) {
+      for (let b = 0; b < 9; b++) {
+        const bMat = trackMat(
+          new THREE.MeshStandardMaterial({
+            color: bookColors[(row * 9 + b) % bookColors.length],
+            roughness: 0.4,
+          })
+        );
+        const book = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.35, 0.38, 0.09)), bMat);
+        book.position.set(
+          CEO_OFFICE.cx - 6.4,
+          0.7 + row * 0.72,
+          CEO_OFFICE.cz + zPos - 1.5 + b * 0.38
+        );
+        ceoGroup.add(book);
+      }
+    }
+  });
+
+  // Figuras coleccionables: Anime (Mecha Robot), Películas (Monolito Sci-Fi) e IA (Cubo Neuronal)
+  // 1) Mecha Robot de Anime
+  const mechaGroup = new THREE.Group();
+  mechaGroup.position.set(CEO_OFFICE.cx - 3.8, 1.05, CEO_OFFICE.cz - 1.8);
+  const mechaBody = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.18, 0.28, 0.14)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xe11d48, metalness: 0.8, roughness: 0.2 }))
+  );
+  const mechaHead = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.1, 0.1, 0.1)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9 }))
+  );
+  mechaHead.position.y = 0.2;
+  const mechaWings = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.04, 0.22, 0.42)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.7 }))
+  );
+  mechaWings.position.set(-0.06, 0.1, 0);
+  mechaGroup.add(mechaBody, mechaHead, mechaWings);
+  ceoGroup.add(mechaGroup);
+
+  // 2) Monolito Sci-Fi de Película
+  const monolith = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.12, 0.48, 0.24)),
+    trackMat(new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.05, metalness: 0.95 }))
+  );
+  monolith.position.set(CEO_OFFICE.cx - 3.8, 1.15, CEO_OFFICE.cz + 1.8);
+  ceoGroup.add(monolith);
+
+  // 3) Cubo de Red Neuronal Holográfica de IA
+  const aiHoloCube = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(0.26, 0.26, 0.26)),
+    trackMat(
+      new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        emissive: 0x38bdf8,
+        emissiveIntensity: 0.85,
+        wireframe: true,
+      })
+    )
+  );
+  aiHoloCube.position.set(CEO_OFFICE.cx - 4.3, 1.15, CEO_OFFICE.cz);
+  spinners.push(aiHoloCube);
+  ceoGroup.add(aiHoloCube);
+
+  // Gran Sofá Seccional de Cuero en el Área Lounge del Despacho (Zona Sur del despacho)
+  const sofaLeatherMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x1f2937,
+      roughness: 0.5,
+      metalness: 0.15,
+    })
+  );
+  const ceoSoofa = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(4.8, 0.48, 1.3)),
+    sofaLeatherMat
+  );
+  ceoSoofa.position.set(CEO_OFFICE.cx + 2.0, 0.42, CEO_OFFICE.cz + 8.8);
+  ceoSoofa.castShadow = true;
+  const ceoSoofaBack = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(4.8, 0.62, 0.32)),
+    sofaLeatherMat
+  );
+  ceoSoofaBack.position.set(CEO_OFFICE.cx + 2.0, 0.9, CEO_OFFICE.cz + 9.35);
+  ceoGroup.add(ceoSoofa, ceoSoofaBack);
+
+  // Mesa de centro baja de mármol negro frente al sofá
+  const marbleMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x030712,
+      roughness: 0.15,
+      metalness: 0.3,
+    })
+  );
+  const marbleTable = new THREE.Mesh(
+    trackGeo(new THREE.BoxGeometry(3.2, 0.08, 1.1)),
+    marbleMat
+  );
+  marbleTable.position.set(CEO_OFFICE.cx + 2.0, 0.38, CEO_OFFICE.cz + 7.2);
+  ceoGroup.add(marbleTable);
+
+  // Rótulo "OFICINA DEL CEO" en la pared del despacho
+  const ceoSignCt = makeCanvasTex(1200, 360);
+  {
+    const g = ceoSignCt.ctx;
+    g.fillStyle = '#0b0f19';
+    g.fillRect(0, 0, 1200, 360);
+    g.fillStyle = '#fbbf24';
+    g.fillRect(0, 0, 1200, 14);
+    g.textAlign = 'center';
+    g.fillStyle = '#f8fafc';
+    g.font = 'bold 88px sans-serif';
+    g.fillText('OFICINA DEL CEO', 600, 180);
+    g.fillStyle = '#fbbf24';
+    g.font = '36px sans-serif';
+    g.fillText('DIRECCIÓN GENERAL · FLOWCLIC OFICINA IA', 600, 260);
+    ceoSignCt.tex.needsUpdate = true;
+  }
+  const ceoSign = new THREE.Mesh(
+    trackGeo(new THREE.PlaneGeometry(4.8, 1.44)),
+    trackMat(
+      new THREE.MeshStandardMaterial({
+        map: ceoSignCt.tex,
+        emissiveMap: ceoSignCt.tex,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.75,
+      })
+    )
+  );
+  ceoSign.position.set(CEO_OFFICE.cx - CEO_OFFICE.w / 2 + 0.12, 3.2, CEO_OFFICE.cz);
+  ceoSign.rotation.y = Math.PI / 2;
+  ceoGroup.add(ceoSign);
+
+  // Iluminación cálida y lujosa de la Oficina del CEO
+  const ceoChandelier = new THREE.PointLight(0xfef08a, 26, 28, 1.5);
+  ceoChandelier.position.set(CEO_OFFICE.cx, 5.0, CEO_OFFICE.cz);
+  ceoGroup.add(ceoChandelier);
+
+  const ceoDeskSpot = new THREE.SpotLight(0xfffbeb, 42, 22, Math.PI / 4, 0.45, 1.4);
+  ceoDeskSpot.position.set(CEO_OFFICE.cx - 3.8, 6.2, CEO_OFFICE.cz);
+  ceoDeskSpot.target.position.set(CEO_OFFICE.cx - 3.8, 0.8, CEO_OFFICE.cz);
+  ceoGroup.add(ceoDeskSpot, ceoDeskSpot.target);
 
   scene = rootScene;
   const hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x1e293b, 0.75);

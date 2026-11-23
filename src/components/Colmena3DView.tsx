@@ -16,7 +16,10 @@ import {
   boardroomSeats,
   BuiltOfficeScene,
   buildColmenaOffice,
+  CEO_OFFICE,
+  CEO_VISITOR_SLOTS,
   CORRIDOR_W,
+  DATACENTER,
   DOORS,
   labTaskSwapPath,
   LOUNGE_SLOTS,
@@ -48,8 +51,13 @@ const CAMERA_PRESETS: Record<
 > = {
   overview: {
     label: 'Vista General',
-    pos: [8, 44, 38],
-    target: [8, 0, 0],
+    pos: [4, 48, 42],
+    target: [0, 0, 0],
+  },
+  oficina_ceo: {
+    label: 'Oficina del CEO',
+    pos: [-23.5, 14.5, 14.0],
+    target: [-23.5, 1.2, 0],
   },
   laboratorio: {
     label: 'Laboratorio',
@@ -70,6 +78,11 @@ const CAMERA_PRESETS: Record<
     label: 'Sala de juntas',
     pos: [21.5, 14, 12],
     target: [21.5, 0.8, 0],
+  },
+  datacenter: {
+    label: 'Data Center',
+    pos: [21.5, 13.5, 1.5],
+    target: [21.5, 1.0, -10.5],
   },
   zona_descanso: {
     label: 'Zona de descanso',
@@ -92,12 +105,13 @@ function shortestAngleDiff(current: number, target: number): number {
   return diff - Math.PI;
 }
 
-type RoomKey = 'sheldon' | 'senior' | 'laboratorio' | 'descanso' | 'junta';
+type RoomKey = 'sheldon' | 'senior' | 'laboratorio' | 'descanso' | 'junta' | 'ceo' | 'datacenter';
 
 /** Oficina en la que está un punto, o null si está en el pasillo en cruz. */
 function getRoom(x: number, z: number): RoomKey | null {
   const hc = CORRIDOR_W / 2;
-  if (x > 14.2) return 'junta';
+  if (x < -14.2) return 'ceo';
+  if (x > 14.2) return z < -4.5 ? 'datacenter' : 'junta';
   if (Math.abs(x) < hc || Math.abs(z) < hc) return null;
   if (z < 0) return x < 0 ? 'sheldon' : 'senior';
   return x < 0 ? 'laboratorio' : 'descanso';
@@ -115,7 +129,13 @@ function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[]
 
   if (toRoom && fromRoom !== toRoom) {
     // Salir de donde está
-    if (fromRoom === 'junta') {
+    if (fromRoom === 'ceo') {
+      push(-15, 0);
+      push(-12, 0);
+    } else if (fromRoom === 'datacenter') {
+      push(16, -10.5);
+      push(13, 0);
+    } else if (fromRoom === 'junta') {
       push(16, 0);
       push(13, 0);
     } else if (fromRoom) {
@@ -126,7 +146,13 @@ function buildWaypoints(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[]
       push(from.x, 0); // desde el pasillo vertical al cruce
     }
     // Entrar a la oficina de destino
-    if (toRoom === 'junta') {
+    if (toRoom === 'ceo') {
+      push(-12, 0);
+      push(-16, 0);
+    } else if (toRoom === 'datacenter') {
+      push(13, 0);
+      push(16, -10.5);
+    } else if (toRoom === 'junta') {
       push(13, 0);
       push(16, 0);
     } else {
@@ -149,7 +175,7 @@ const isSenior = (a: Agent) => !a.isCTO && /full.?stack/i.test(a.title ?? '');
 /** Agentes con puesto fijo en el laboratorio (todos menos el CTO y el Senior), en orden. */
 const labDeskAgents = (agents: Agent[]) => agents.filter((a) => !a.isCTO && !isSenior(a));
 
-function assignZoneSlots(agents: Agent[], meeting = false): Map<string, ZoneSlot> {
+function assignZoneSlots(agents: Agent[], meeting = false, tasks: KanbanTask[] = []): Map<string, ZoneSlot> {
   const map = new Map<string, ZoneSlot>();
 
   if (meeting) {
@@ -161,6 +187,11 @@ function assignZoneSlots(agents: Agent[], meeting = false): Map<string, ZoneSlot
     return map;
   }
 
+  // Comprobar si hay tareas pendientes de revisión/aprobación por el CEO o si Sheldon/Leonard están esperando
+  const hasPendingCeoApproval = tasks.some(
+    (t) => t.stage === 'sheldon_review' || (t as any).requiresApproval
+  );
+
   const owners = labDeskAgents(agents);
   let reviewIdx = 0;
   let loungeIdx = 0;
@@ -168,6 +199,18 @@ function assignZoneSlots(agents: Agent[], meeting = false): Map<string, ZoneSlot
   agents.forEach((agent) => {
     // BLOCKED espera en la zona de revisión; SLEEP_QUOTA descansa (lounge / puf / sofá).
     const inReview = agent.status === 'waiting_sheldon' || agent.status === 'blocked';
+    const isLeonard = !agent.isCTO && (agent.id === 'leonard' || /full.?stack/i.test(agent.title ?? ''));
+
+    // Si Sheldon o Leonard están esperando aprobación del CEO, se sientan en las sillas de la Oficina del CEO
+    if (agent.isCTO && (inReview || hasPendingCeoApproval)) {
+      map.set(agent.id, CEO_VISITOR_SLOTS.chairSheldon);
+      return;
+    }
+    if (isLeonard && (inReview || hasPendingCeoApproval)) {
+      map.set(agent.id, CEO_VISITOR_SLOTS.chairLeonard);
+      return;
+    }
+
     if (agent.isCTO) {
       // Trabaja sentado en su escritorio, revisa de pie frente a los tableros, descansa en el sofá.
       map.set(
@@ -770,7 +813,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     const shadowTex = shadowTexRef.current;
     if (!scene || !shadowTex) return;
 
-    const slots = assignZoneSlots(agents, meeting);
+    const slots = assignZoneSlots(agents, meeting, tasks);
     const rigs = rigsRef.current;
     const owners = labDeskAgents(agents);
 
