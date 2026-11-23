@@ -3,7 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
-  Download,
+  Pencil,
   Plus,
   RefreshCw,
   Users,
@@ -38,8 +38,7 @@ const DISABLED_TEXT = 'Disponible tras el login (S06)';
 interface AdminViewProps {
   agents: Agent[];
   onOpenCreateAgent: () => void;
-  /** Carga el equipo base en la API. Devuelve el mensaje del resultado y si fue un error. */
-  onLoadBaseTeam: () => Promise<{ message: string; isError: boolean }>;
+  onOpenEditAgent: (agent: Agent) => void;
 }
 
 type DbState =
@@ -55,16 +54,11 @@ const yesNo = (v: boolean | undefined): string =>
 export const AdminView: React.FC<AdminViewProps> = ({
   agents,
   onOpenCreateAgent,
-  onLoadBaseTeam,
+  onOpenEditAgent,
 }) => {
   const [tab, setTab] = useState<AdminTab>('db');
   const [db, setDb] = useState<DbState>({ kind: 'loading' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loadingTeam, setLoadingTeam] = useState(false);
-  const [teamResult, setTeamResult] = useState<{
-    message: string;
-    isError: boolean;
-  } | null>(null);
 
   const refreshDb = useCallback(async () => {
     setDb({ kind: 'loading' });
@@ -84,14 +78,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   useEffect(() => {
     if (tab === 'db') void refreshDb();
   }, [tab, refreshDb]);
-
-  const handleLoadTeam = async () => {
-    if (loadingTeam) return;
-    setLoadingTeam(true);
-    setTeamResult(null);
-    setTeamResult(await onLoadBaseTeam());
-    setLoadingTeam(false);
-  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -217,15 +203,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleLoadTeam()}
-                  disabled={loadingTeam}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 text-xs font-medium text-slate-200 transition-all hover:border-cyan-500/60 hover:text-cyan-200 active:scale-95 disabled:opacity-60"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {loadingTeam ? 'Cargando…' : 'Cargar equipo base'}
-                </button>
-                <button
-                  type="button"
                   onClick={onOpenCreateAgent}
                   className="flex items-center gap-1.5 rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-3.5 py-2 text-xs font-medium text-cyan-200 transition-all hover:-translate-y-0.5 hover:bg-cyan-500/20 active:translate-y-0 active:scale-95"
                 >
@@ -235,22 +212,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             </div>
 
-            {teamResult && (
-              <div
-                className={`mx-5 mt-3.5 rounded-xl border px-3.5 py-2 text-xs ${
-                  teamResult.isError
-                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
-                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                }`}
-              >
-                {teamResult.message}
-              </div>
-            )}
-
             {agents.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="text-xs text-slate-500">
-                  Aún no hay agentes. Crea el primero o carga el equipo base.
+                  Aún no hay agentes. Crea el primero para empezar.
                 </p>
                 <button
                   type="button"
@@ -271,7 +236,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <th className="px-3 py-2.5 font-medium">Estado</th>
                       <th className="px-3 py-2.5 font-medium">Modelo</th>
                       <th className="px-3 py-2.5 font-medium">Proyecto</th>
-                      <th className="px-5 py-2.5 text-right font-medium">Conexiones API</th>
+                      <th className="px-5 py-2.5 text-right font-medium">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/70">
@@ -297,19 +262,29 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             </td>
                             <td className="px-3 py-3 text-slate-400">{a.project || '—'}</td>
                             <td className="px-5 py-3 text-right">
-                              <button
-                                type="button"
-                                aria-expanded={open}
-                                onClick={() => setExpandedId(open ? null : a.id)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200"
-                              >
-                                {open ? (
-                                  <ChevronDown className="h-3 w-3" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3" />
-                                )}
-                                {open ? 'Ocultar' : 'Gestionar'}
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenEditAgent(a)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-expanded={open}
+                                  onClick={() => setExpandedId(open ? null : a.id)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200"
+                                >
+                                  {open ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                  )}
+                                  {open ? 'Ocultar' : 'Gestionar'}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                           {open && (

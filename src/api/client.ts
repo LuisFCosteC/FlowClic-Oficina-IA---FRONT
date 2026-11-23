@@ -3,13 +3,16 @@ import type {
   ApiAgent,
   ApiAgentCreate,
   ApiAgentStatus,
+  ApiAgentUpdate,
   ApiCredential,
   ApiLoadTeamResult,
+  ApiModelInfo,
   ApiSetupStatus,
   ApiSnapshot,
   ApiTicket,
   ApiTicketCreate,
   ApiTicketStatus,
+  ApiWorkspace,
   CredentialProvider,
 } from './types';
 
@@ -66,10 +69,15 @@ export const api = {
   snapshot: () => request<ApiSnapshot>('GET', '/api/snapshot'),
 
   createAgent: (body: ApiAgentCreate) => request<ApiAgent>('POST', '/api/agents', body),
+  updateAgent: (id: string, body: ApiAgentUpdate) =>
+    request<ApiAgent>('PATCH', `/api/agents/${encodeURIComponent(id)}`, body),
   setAgentStatus: (id: string, status: ApiAgentStatus) =>
     request<ApiAgent>('PATCH', `/api/agents/${encodeURIComponent(id)}/status`, { status }),
   loadBaseTeam: () =>
     request<ApiLoadTeamResult>('POST', '/api/admin/agents/load-base-team'),
+
+  listModels: () => request<ApiModelInfo[]>('GET', '/api/models'),
+  listWorkspaces: () => request<ApiWorkspace[]>('GET', '/api/admin/workspaces'),
 
   createTicket: (body: ApiTicketCreate) => request<ApiTicket>('POST', '/api/tickets', body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>

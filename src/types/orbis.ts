@@ -1,4 +1,10 @@
-import type { ApiTicketStatus } from '../api/types';
+import type {
+  AgentLimits,
+  AgentModelConfig,
+  AgentPermissions,
+  RoleType,
+} from './agentProfile';
+import type { ApiAgent, ApiTicketStatus } from '../api/types';
 
 export type ActiveModule = 'kanban' | 'roadmap' | 'cerebro' | 'colmena3d' | 'admin';
 
@@ -41,6 +47,15 @@ export interface Agent {
   isCTO?: boolean;
   glasses?: boolean;
   hairStyle?: 'short' | 'long' | 'curly' | 'bun' | 'parted';
+  character?: string;
+  roleType?: RoleType;
+  functions?: string[];
+  rules?: string[];
+  restrictions?: string[];
+  permissions?: AgentPermissions;
+  modelConfig?: AgentModelConfig;
+  limits?: AgentLimits;
+  raw?: ApiAgent;
 }
 
 export interface ModelNode {

@@ -77,6 +77,15 @@ export function agentFromApi(a: ApiAgent): Agent {
       hair === 'short' || hair === 'long' || hair === 'curly' || hair === 'bun' || hair === 'parted'
         ? hair
         : undefined,
+    character: a.character,
+    roleType: a.roleType,
+    functions: a.functions,
+    rules: a.rules,
+    restrictions: a.restrictions,
+    permissions: a.permissions,
+    modelConfig: a.model,
+    limits: a.limits,
+    raw: a,
   };
 }
 

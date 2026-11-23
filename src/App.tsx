@@ -3,24 +3,25 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Menu } from 'lucide-react';
 import {
   ActiveModule,
+  Agent,
   AgentStatus,
   ModelHealthStatus,
   ModelNode,
-  NewAgentInput,
   NewTaskInput,
   ProjectMilestone,
   ProjectRoadmap,
   RoutingPolicy,
   TaskStage,
 } from './types/orbis';
+import type { AgentCreatePayload } from './types/agentProfile';
 import { INITIAL_MODELS, isResting } from './data/initialData';
 import { api, ApiError } from './api/client';
+import type { ApiAgentCreate, ApiAgentUpdate } from './api/types';
 import { CONFIG_ERROR } from './api/config';
 import { connectRealtime } from './api/realtime';
 import {
   agentFromApi,
   agentStatusToApi,
-  MODEL_ID_BY_TIER,
   priorityToApi,
   proposalFromApproval,
   stageFromTicket,
@@ -33,7 +34,7 @@ import { Colmena3DView } from './components/Colmena3DView';
 import { CerebroOrbisView } from './components/CerebroOrbisView';
 import { KanbanPipelineView } from './components/KanbanPipelineView';
 import { RoadmapCalendarView } from './components/RoadmapCalendarView';
-import { CreateAgentModal } from './components/CreateAgentModal';
+import { CreateAgentProfileModal } from './components/CreateAgentProfileModal';
 import { AdminView } from './components/AdminView';
 import { EmptyState } from './components/EmptyState';
 
@@ -70,7 +71,7 @@ const EMPTY_TEXT: Record<
   kanban: {
     title: 'Todavía no hay agentes',
     description:
-      'El tablero se llena con las tareas de tu equipo. Crea el primer agente (o carga el equipo base desde Administración) para empezar.',
+      'El tablero se llena con las tareas de tu equipo. Crea el primer agente para empezar.',
   },
   roadmap: {
     title: 'Todavía no hay agentes ni proyectos',
@@ -104,6 +105,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [createAgentOpen, setCreateAgentOpen] = useState<boolean>(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
 
   // Datos del servidor (BD): agentes, tickets y aprobaciones.
   const [store, dispatch] = useOfficeStore();
@@ -190,39 +192,52 @@ export default function App() {
     }
   };
 
-  const handleCreateAgent = async (input: NewAgentInput): Promise<string | null> => {
-    const functions = input.description
-      .split('\n')
-      .map((l) => l.trim().slice(0, 500))
-      .filter((l) => l !== '')
-      .slice(0, 40);
+  const handleSaveAgentProfile = async (
+    payload: AgentCreatePayload,
+    isEdit?: boolean,
+    changedFields?: Partial<AgentCreatePayload>
+  ): Promise<void> => {
     try {
-      const created = await api.createAgent({
-        name: input.name,
-        role: input.title,
-        roleType: 'CUSTOM',
-        avatar: { color: input.color, glasses: input.glasses },
-        functions,
-        model: { primary: MODEL_ID_BY_TIER[input.modelTier] },
-        ...(input.project ? { project: input.project } : {}),
-      });
-      dispatch({ type: 'agent.upsert', agent: created });
-      return null;
+      if (isEdit && editingAgent) {
+        const body: ApiAgentUpdate = {
+          ...(changedFields?.name !== undefined ? { name: changedFields.name } : {}),
+          ...(changedFields?.role !== undefined ? { role: changedFields.role } : {}),
+          ...(changedFields?.roleType !== undefined ? { roleType: changedFields.roleType } : {}),
+          ...(changedFields?.character !== undefined ? { character: changedFields.character } : {}),
+          ...(changedFields?.avatar !== undefined ? { avatar: changedFields.avatar } : {}),
+          ...(changedFields?.functions !== undefined ? { functions: changedFields.functions } : {}),
+          ...(changedFields?.rules !== undefined ? { rules: changedFields.rules } : {}),
+          ...(changedFields?.restrictions !== undefined ? { restrictions: changedFields.restrictions } : {}),
+          ...(changedFields?.permissions !== undefined ? { permissions: changedFields.permissions } : {}),
+          ...(changedFields?.model !== undefined ? { model: changedFields.model } : {}),
+          ...(changedFields?.limits !== undefined ? { limits: changedFields.limits } : {}),
+        };
+        const updated = await api.updateAgent(editingAgent.id, body);
+        dispatch({ type: 'agent.upsert', agent: updated });
+        setCreateAgentOpen(false);
+        setEditingAgent(null);
+      } else {
+        const body: ApiAgentCreate = {
+          name: payload.name,
+          role: payload.role,
+          roleType: payload.roleType,
+          character: payload.character,
+          avatar: payload.avatar,
+          functions: payload.functions,
+          rules: payload.rules,
+          restrictions: payload.restrictions,
+          permissions: payload.permissions,
+          model: payload.model,
+          limits: payload.limits,
+          ...(payload.project ? { project: payload.project } : {}),
+        };
+        const created = await api.createAgent(body);
+        dispatch({ type: 'agent.upsert', agent: created });
+        setCreateAgentOpen(false);
+        setEditingAgent(null);
+      }
     } catch (err) {
-      return apiMessage(err);
-    }
-  };
-
-  const handleLoadBaseTeam = async (): Promise<{ message: string; isError: boolean }> => {
-    try {
-      const res = await api.loadBaseTeam();
-      res.created.forEach((agent) => dispatch({ type: 'agent.upsert', agent }));
-      return {
-        message: `Equipo base: ${res.created.length} creados, ${res.skipped.length} ya existían.`,
-        isError: false,
-      };
-    } catch (err) {
-      return { message: apiMessage(err), isError: true };
+      throw new Error(apiMessage(err));
     }
   };
 
@@ -322,7 +337,14 @@ export default function App() {
   ).length;
   const activeAgentsCount = agents.filter((a) => !isResting(a.status)).length;
   const headerInfo = MODULE_HEADERS[activeModule];
-  const openCreateAgent = () => setCreateAgentOpen(true);
+  const openCreateAgent = () => {
+    setEditingAgent(null);
+    setCreateAgentOpen(true);
+  };
+  const openEditAgent = (agent: Agent) => {
+    setEditingAgent(agent);
+    setCreateAgentOpen(true);
+  };
 
   // Aviso visible de conexión (API caída, modo SETUP, configuración o tiempo real cortado).
   let banner: { tone: 'error' | 'warn'; text: string } | null = null;
@@ -548,7 +570,7 @@ export default function App() {
                   <AdminView
                     agents={agents}
                     onOpenCreateAgent={openCreateAgent}
-                    onLoadBaseTeam={handleLoadBaseTeam}
+                    onOpenEditAgent={openEditAgent}
                   />
                 </motion.div>
               )}
@@ -570,11 +592,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal 5: + Crear Nuevo Agente */}
-      <CreateAgentModal
+      {/* Modal: Crear / Editar Agente con perfiles, modelo y permisos (G07) */}
+      <CreateAgentProfileModal
         open={createAgentOpen}
-        onClose={() => setCreateAgentOpen(false)}
-        onCreateAgent={handleCreateAgent}
+        onClose={() => {
+          setCreateAgentOpen(false);
+          setEditingAgent(null);
+        }}
+        onSubmit={handleSaveAgentProfile}
+        agentToEdit={editingAgent}
       />
     </div>
   );

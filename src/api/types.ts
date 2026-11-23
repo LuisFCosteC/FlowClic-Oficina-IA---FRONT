@@ -1,3 +1,10 @@
+import type {
+  AgentLimits,
+  AgentModelConfig,
+  AgentPermissions,
+  HairStyle,
+} from '../types/agentProfile';
+
 /** DTOs de la API (PLAN §6 y §19). Todo en camelCase, tal como responde la API. */
 
 export type ApiAgentStatus =
@@ -26,6 +33,21 @@ export type ApiApprovalCategory =
   | 'Datos';
 export type CredentialProvider = 'anthropic' | 'openai' | 'google' | 'other';
 
+export interface ApiModelInfo {
+  id: string;
+  label: string;
+  provider: string;
+  hasConnection: boolean;
+}
+
+export interface ApiWorkspace {
+  id: string;
+  name: string;
+  path: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ApiAgent {
   id: string;
   name: string;
@@ -33,11 +55,13 @@ export interface ApiAgent {
   role: string;
   roleType: ApiRoleType;
   status: ApiAgentStatus;
-  avatar: { color: string; glasses?: boolean | null; hairStyle?: string | null };
+  avatar: { color: string; glasses?: boolean | null; hairStyle?: HairStyle | null };
   functions: string[];
   rules: string[];
   restrictions: string[];
-  model: { primary: string; fallback?: string | null; fallbackCondition?: string | null };
+  permissions?: AgentPermissions;
+  model: AgentModelConfig;
+  limits?: AgentLimits;
   systemPrompt: string;
   isCto: boolean;
   currentTask: string | null;
@@ -97,11 +121,18 @@ export interface ApiAgentCreate {
   name: string;
   role: string;
   roleType?: ApiRoleType;
-  avatar?: { color: string; glasses?: boolean };
+  character?: string;
+  avatar?: { color: string; glasses?: boolean | null; hairStyle?: HairStyle | null };
   functions?: string[];
-  model?: { primary: string; fallback?: string | null };
-  project?: string;
+  rules?: string[];
+  restrictions?: string[];
+  permissions?: AgentPermissions;
+  model?: AgentModelConfig;
+  limits?: AgentLimits;
+  project?: string | null;
 }
+
+export type ApiAgentUpdate = Partial<ApiAgentCreate>;
 
 export interface ApiTicketCreate {
   title: string;
