@@ -6,7 +6,8 @@ export type RealtimeEvent =
   | { type: 'agent.archived'; id: string }
   | { type: 'ticket.created' | 'ticket.updated'; ticket: ApiTicket }
   | { type: 'ticket.deleted'; id: string }
-  | { type: 'approval.created' | 'approval.updated'; approval: ApiApproval };
+  | { type: 'approval.created' | 'approval.updated'; approval: ApiApproval }
+  | { type: 'settings.updated'; key: 'project' | 'limits'; value: unknown };
 
 export interface RealtimeHandlers {
   onEvent: (event: RealtimeEvent) => void;
@@ -85,6 +86,10 @@ export function connectRealtime(handlers: RealtimeHandlers): () => void {
         if (approval) handlers.onEvent({ type, approval });
       });
     }
+    es.addEventListener('settings.updated', (e) => {
+      const p = parse<{ key: 'project' | 'limits'; value: unknown }>(e);
+      if (p) handlers.onEvent({ type: 'settings.updated', key: p.key, value: p.value });
+    });
   };
 
   open();

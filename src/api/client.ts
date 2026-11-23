@@ -7,6 +7,7 @@ import type {
   ApiCredential,
   ApiLoadTeamResult,
   ApiModelInfo,
+  ApiProjectSettings,
   ApiSetupStatus,
   ApiSnapshot,
   ApiTicket,
@@ -86,6 +87,10 @@ export const api = {
 
   listModels: () => request<ApiModelInfo[]>('GET', '/api/models'),
   listWorkspaces: () => request<ApiWorkspace[]>('GET', '/api/admin/workspaces'),
+  getProjectSettings: () =>
+    request<ApiProjectSettings>('GET', '/api/admin/settings/project'),
+  updateProjectSettings: (body: ApiProjectSettings) =>
+    request<ApiProjectSettings>('PUT', '/api/admin/settings/project', body),
   upsertWorkspace: (id: string, body: ApiWorkspaceBody) =>
     request<ApiWorkspace>('PUT', `/api/admin/workspaces/${encodeURIComponent(id)}`, body),
   deleteWorkspace: (id: string) =>

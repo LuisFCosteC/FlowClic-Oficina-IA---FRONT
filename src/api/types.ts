@@ -65,6 +65,14 @@ export interface ApiWorkspaceBody {
   path: string;
 }
 
+export interface ApiProjectSettings {
+  companyName: string;
+  projectName: string;
+  description: string;
+  goals: string[];
+  stack: string[];
+}
+
 export interface ApiAgent {
   id: string;
   name: string;
