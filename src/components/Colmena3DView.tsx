@@ -13,7 +13,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Agent, AgentStatus } from '../types/orbis';
-import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
+import { MODEL_TIER_META, STATUS_META, isResting } from '../data/initialData';
 import {
   AvatarRig,
   createAvatarRig,
@@ -123,7 +123,9 @@ function assignZoneSlots(agents: Agent[]): Map<string, ZoneSlot> {
   let loungeIdx = 0;
 
   agents.forEach((agent) => {
-    if (agent.isCTO && agent.status === 'waiting_sheldon') {
+    // BLOCKED espera en la zona de revisión; SLEEP_QUOTA descansa en el apartamento (lounge).
+    const inReview = agent.status === 'waiting_sheldon' || agent.status === 'blocked';
+    if (agent.isCTO && inReview) {
       map.set(agent.id, SHELDON_CTO_SLOT);
       return;
     }
@@ -137,7 +139,7 @@ function assignZoneSlots(agents: Agent[]): Map<string, ZoneSlot> {
         yaw: base.yaw,
       });
       workIdx++;
-    } else if (agent.status === 'waiting_sheldon') {
+    } else if (inReview) {
       const base = REVIEW_SLOTS[reviewIdx % REVIEW_SLOTS.length];
       const overflow = Math.floor(reviewIdx / REVIEW_SLOTS.length);
       map.set(agent.id, {
@@ -169,7 +171,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
   const labelRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const zoneLabelRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('leonard');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [dockExpanded, setDockExpanded] = useState<boolean>(true);
   const [activePreset, setActivePreset] = useState<CameraPresetKey>('overview');
   const [webglLost, setWebglLost] = useState<boolean>(false);
@@ -579,6 +581,21 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     const slots = assignZoneSlots(agents);
     const rigs = rigsRef.current;
 
+    // Agentes archivados o eliminados: se retiran de la escena.
+    const liveIds = new Set(agents.map((a) => a.id));
+    rigs.forEach((rig, id) => {
+      if (liveIds.has(id)) return;
+      scene.remove(rig.root);
+      rig.root.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m: THREE.Material) => m.dispose());
+        }
+      });
+      rigs.delete(id);
+    });
+
     agents.forEach((agent) => {
       const slot = slots.get(agent.id) ?? { x: 0, z: 0, yaw: 0 };
       const existing = rigs.get(agent.id);
@@ -674,8 +691,10 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
     agents.find((a) => a.id === selectedAgentId) ?? agents[0];
 
   const workingCount = agents.filter((a) => a.status === 'working').length;
-  const reviewCount = agents.filter((a) => a.status === 'waiting_sheldon').length;
-  const idleCount = agents.filter((a) => a.status === 'idle').length;
+  const reviewCount = agents.filter(
+    (a) => a.status === 'waiting_sheldon' || a.status === 'blocked'
+  ).length;
+  const idleCount = agents.filter((a) => isResting(a.status)).length;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#060A12]">

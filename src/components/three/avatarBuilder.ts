@@ -24,6 +24,8 @@ const STATUS_HEX: Record<AgentStatus, number> = {
   working: 0x10b981,
   waiting_sheldon: 0xf59e0b,
   idle: 0x64748b,
+  blocked: 0xf43f5e,
+  sleep_quota: 0x8b5cf6,
 };
 
 export function createAvatarRig(

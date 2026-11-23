@@ -19,7 +19,7 @@ import {
   RoutingPolicy,
   SheldonProposal,
 } from '../types/orbis';
-import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
+import { MODEL_TIER_META, STATUS_META, isResting } from '../data/initialData';
 
 interface CerebroOrbisViewProps {
   agents: Agent[];
@@ -50,7 +50,7 @@ const POLICY_CONFIG: Record<
   },
   max_precision: {
     label: 'Precisión Máxima',
-    description: 'Enruta decisiones críticas a Claude Opus 4 y Gemini 2.5 Pro.',
+    description: 'Enruta decisiones críticas a Claude Opus 5.5 y Gemini Pro.',
     baseSavingsPct: 24.6,
     claudeSplit: 72,
   },
@@ -80,7 +80,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
   );
 
   const purgedAgentsCount = useMemo(
-    () => agents.filter((a) => a.status === 'idle').length,
+    () => agents.filter((a) => isResting(a.status)).length,
     [agents]
   );
   const totalRamMb = useMemo(
@@ -89,24 +89,17 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
   );
 
   const policyMeta = POLICY_CONFIG[routingPolicy];
-  const ephemeralBonusPct = Number(
-    ((purgedAgentsCount / Math.max(agents.length, 1)) * 11.5).toFixed(1)
-  );
-  const totalSavingsPct = Math.min(
-    72,
-    Number((policyMeta.baseSavingsPct + ephemeralBonusPct).toFixed(1))
-  );
-  const tokensSavedMillions = Number(
-    (12.6 + (totalSavingsPct / 100) * 14.2).toFixed(1)
-  );
-  const monthlyUsdSaved = Math.round(tokensSavedMillions * 195);
+  // Sin medición real todavía (la API aún no cuenta tokens): no se inventan cifras de ahorro.
+  const totalSavingsPct = 0;
+  const tokensSavedMillions = 0;
+  const monthlyUsdSaved = 0;
 
   const pendingProposals = proposals.filter((p) => p.status === 'pending');
   const resolvedProposals = proposals.filter((p) => p.status !== 'pending');
 
   const filteredAgents = useMemo(() => {
-    if (memoryFilter === 'active') return agents.filter((a) => a.status !== 'idle');
-    if (memoryFilter === 'purged') return agents.filter((a) => a.status === 'idle');
+    if (memoryFilter === 'active') return agents.filter((a) => !isResting(a.status));
+    if (memoryFilter === 'purged') return agents.filter((a) => isResting(a.status));
     return agents;
   }, [agents, memoryFilter]);
 
@@ -117,8 +110,9 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
     .filter((m) => m.provider === 'Gemini' && m.status !== 'maintenance')
     .reduce((acc, m) => acc + m.trafficShare, 0);
   const shareNorm = Math.max(1, claudeTotalShare + geminiTotalShare);
-  const claudePct = Math.round((claudeTotalShare / shareNorm) * 100);
-  const geminiPct = 100 - claudePct;
+  const hasTraffic = claudeTotalShare + geminiTotalShare > 0;
+  const claudePct = hasTraffic ? Math.round((claudeTotalShare / shareNorm) * 100) : 0;
+  const geminiPct = hasTraffic ? 100 - claudePct : 0;
 
   return (
     <div className="h-full overflow-y-auto px-5 py-6 lg:px-8">
@@ -494,7 +488,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
               <tbody className="divide-y divide-slate-800/60">
                 {filteredAgents.map((agent) => {
                   const st = STATUS_META[agent.status];
-                  const isPurged = agent.status === 'idle';
+                  const isPurged = isResting(agent.status);
                   return (
                     <tr
                       key={agent.id}
