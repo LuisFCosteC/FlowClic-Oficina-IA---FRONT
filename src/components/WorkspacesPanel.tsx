@@ -29,8 +29,21 @@ interface FormState {
   name: string;
   path: string;
   error?: string;
+  idError?: string;
+  idManuallyEdited?: boolean;
   submitting: boolean;
 }
+
+const WS_ID_REGEX = /^[a-z][a-z0-9_-]{0,31}$/;
+
+const slugifyWorkspaceId = (name: string): string =>
+  name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9_-]/g, '')
+    .slice(0, 32);
 
 export const WorkspacesPanel: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
@@ -100,6 +113,8 @@ export const WorkspacesPanel: React.FC = () => {
       path: '',
       submitting: false,
       error: undefined,
+      idError: undefined,
+      idManuallyEdited: false,
     });
   };
 
@@ -112,7 +127,36 @@ export const WorkspacesPanel: React.FC = () => {
       path: ws.path,
       submitting: false,
       error: undefined,
+      idError: undefined,
+      idManuallyEdited: true,
     });
+  };
+
+  const handleNameChange = (val: string) => {
+    setForm((prev) => {
+      if (prev.isEditing || prev.idManuallyEdited) {
+        return { ...prev, name: val };
+      }
+      const proposed = slugifyWorkspaceId(val);
+      const isInvalid = proposed.length > 0 && !WS_ID_REGEX.test(proposed);
+      return {
+        ...prev,
+        name: val,
+        id: proposed,
+        idError: isInvalid ? 'Solo minúsculas, números, - y _ (ej. pagina-abogada)' : undefined,
+      };
+    });
+  };
+
+  const handleIdChange = (val: string) => {
+    const trimmed = val.trim();
+    const isInvalid = trimmed.length > 0 && !WS_ID_REGEX.test(trimmed);
+    setForm((prev) => ({
+      ...prev,
+      id: val,
+      idManuallyEdited: true,
+      idError: isInvalid ? 'Solo minúsculas, números, - y _ (ej. pagina-abogada)' : undefined,
+    }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -121,8 +165,11 @@ export const WorkspacesPanel: React.FC = () => {
     const trimmedName = form.name.trim();
     const trimmedPath = form.path.trim();
 
-    if (!trimmedId) {
-      setForm((prev) => ({ ...prev, error: 'El identificador es obligatorio.' }));
+    if (!WS_ID_REGEX.test(trimmedId)) {
+      setForm((prev) => ({
+        ...prev,
+        idError: 'Solo minúsculas, números, - y _ (ej. pagina-abogada)',
+      }));
       return;
     }
     if (!trimmedName) {
@@ -134,7 +181,7 @@ export const WorkspacesPanel: React.FC = () => {
       return;
     }
 
-    setForm((prev) => ({ ...prev, submitting: true, error: undefined }));
+    setForm((prev) => ({ ...prev, submitting: true, error: undefined, idError: undefined }));
 
     try {
       await api.upsertWorkspace(trimmedId, {
@@ -148,10 +195,22 @@ export const WorkspacesPanel: React.FC = () => {
         name: '',
         path: '',
         submitting: false,
+        error: undefined,
+        idError: undefined,
+        idManuallyEdited: false,
       });
       await fetchWorkspaces();
       void handleCheck(trimmedId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 400) {
+        setForm((prev) => ({
+          ...prev,
+          submitting: false,
+          idError: err.message,
+          error: undefined,
+        }));
+        return;
+      }
       const msg = err instanceof ApiError ? err.message : 'Error al guardar el espacio.';
       setForm((prev) => ({ ...prev, submitting: false, error: msg }));
     }
@@ -395,15 +454,21 @@ export const WorkspacesPanel: React.FC = () => {
                   required
                   disabled={form.isEditing}
                   value={form.id}
-                  onChange={(e) => setForm((p) => ({ ...p, id: e.target.value }))}
+                  onChange={(e) => handleIdChange(e.target.value)}
                   placeholder="ej. workspace-front"
-                  className="mt-1 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`mt-1 w-full rounded-xl border ${
+                    form.idError
+                      ? 'border-rose-500/80 focus:border-rose-500'
+                      : 'border-slate-700/80 focus:border-cyan-500'
+                  } bg-slate-900/90 px-3.5 py-2 font-mono text-xs text-slate-200 placeholder-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60`}
                 />
-                {!form.isEditing && (
+                {form.idError ? (
+                  <p className="mt-1 text-[11px] font-medium text-rose-400">{form.idError}</p>
+                ) : !form.isEditing ? (
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Solo minúsculas, números y guiones.
+                    Solo minúsculas, números, - y _ (ej. pagina-abogada)
                   </p>
-                )}
+                ) : null}
               </div>
 
               <div>
@@ -414,7 +479,7 @@ export const WorkspacesPanel: React.FC = () => {
                   type="text"
                   required
                   value={form.name}
-                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  onChange={(e) => handleNameChange(e.target.value)}
                   placeholder="ej. Repositorio Front"
                   className="mt-1 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
                 />
