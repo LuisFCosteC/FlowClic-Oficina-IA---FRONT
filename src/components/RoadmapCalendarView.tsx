@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import { todayLocal, parseLocalDate, formatDayMonthLocal } from '../utils/date';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Calendar,
@@ -45,15 +46,7 @@ const MILESTONE_META: Record<
   entrega: { label: 'Entrega Final', color: '#10B981' },
 };
 
-const TIMELINE_START = new Date('2026-11-01T00:00:00').getTime();
-const TIMELINE_END = new Date('2026-12-15T00:00:00').getTime();
-const TIMELINE_SPAN = TIMELINE_END - TIMELINE_START;
-
-function dateToPct(dateStr: string): number {
-  const t = new Date(`${dateStr}T00:00:00`).getTime();
-  const raw = ((t - TIMELINE_START) / TIMELINE_SPAN) * 100;
-  return Math.max(0, Math.min(100, raw));
-}
+// Fixed timeline constants replaced by dynamic useMemo inside RoadmapCalendarView
 
 export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
   projects,
@@ -61,14 +54,87 @@ export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
   onUpdateProjectDates,
   onAddMilestone,
 }) => {
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(10); // November 2026
-  const [selectedDate, setSelectedDate] = useState<string>('2026-11-22');
+  const initialToday = todayLocal();
+  const initialParsed = parseLocalDate(initialToday);
+
+  const [today, setToday] = useState<string>(initialToday);
+  const [year, setYear] = useState<number>(initialParsed.year);
+  const [month, setMonth] = useState<number>(initialParsed.month);
+  const [selectedDate, setSelectedDate] = useState<string>(initialToday);
   const [modalOpen, setModalOpen] = useState(false);
 
   const [msProjectId, setMsProjectId] = useState(projects[0]?.id ?? '');
   const [msTitle, setMsTitle] = useState('');
-  const [msDate, setMsDate] = useState('2026-11-24');
+  const [msDate, setMsDate] = useState(initialToday);
+
+  // Recalcular 'today' automáticamente si la app sigue abierta y cambia el día local
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const current = todayLocal();
+      if (current !== today) {
+        setToday(current);
+      }
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [today]);
+
+  // Rango dinámico del timeline calculado desde 'hoy' y los proyectos (o el mes actual si no hay proyectos)
+  const { timelineTicks, dateToPct } = useMemo(() => {
+    const todayTime = new Date(`${today}T00:00:00`).getTime();
+    let minTime = todayTime;
+    let maxTime = todayTime;
+
+    if (projects.length > 0) {
+      projects.forEach((p) => {
+        if (p.startDate) {
+          const t = new Date(`${p.startDate}T00:00:00`).getTime();
+          if (!isNaN(t)) minTime = Math.min(minTime, t);
+        }
+        if (p.endDate) {
+          const t = new Date(`${p.endDate}T00:00:00`).getTime();
+          if (!isNaN(t)) maxTime = Math.max(maxTime, t);
+        }
+        if (p.reviewDate) {
+          const t = new Date(`${p.reviewDate}T00:00:00`).getTime();
+          if (!isNaN(t)) {
+            minTime = Math.min(minTime, t);
+            maxTime = Math.max(maxTime, t);
+          }
+        }
+      });
+      // Margen de 7 días antes y 14 días después
+      minTime -= 7 * 86400000;
+      maxTime += 14 * 86400000;
+    } else {
+      // Mes actual completo con margen
+      const { year: y, month: m } = parseLocalDate(today);
+      minTime = new Date(y, m, 1).getTime();
+      maxTime = new Date(y, m + 1, 0, 23, 59, 59).getTime();
+    }
+
+    // Asegurar duración mínima de 30 días
+    if (maxTime - minTime < 30 * 86400000) {
+      maxTime = minTime + 30 * 86400000;
+    }
+
+    const span = maxTime - minTime;
+
+    // 5 marcas en la escala de tiempo
+    const ticks: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const t = minTime + (span * i) / 4;
+      ticks.push(formatDayMonthLocal(t));
+    }
+
+    const toPct = (dateStr: string) => {
+      const t = new Date(`${dateStr}T00:00:00`).getTime();
+      if (isNaN(t)) return 0;
+      const raw = ((t - minTime) / span) * 100;
+      return Math.max(0, Math.min(100, raw));
+    };
+
+    return { timelineTicks: ticks, dateToPct: toPct };
+  }, [today, projects]);
   const [msType, setMsType] =
     useState<ProjectMilestone['type']>('revision_sheldon');
 
@@ -211,11 +277,9 @@ export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
               <div className="grid grid-cols-12 bg-[#090F1B] px-5 py-2.5 font-mono text-[11px] text-slate-400">
                 <div className="col-span-4">Proyecto & Fechas Clave</div>
                 <div className="col-span-8 flex justify-between">
-                  <span>01 Nov</span>
-                  <span>10 Nov</span>
-                  <span>20 Nov</span>
-                  <span>30 Nov</span>
-                  <span>15 Dic</span>
+                  {timelineTicks.map((tick, i) => (
+                    <span key={i}>{tick}</span>
+                  ))}
                 </div>
               </div>
 
@@ -223,7 +287,7 @@ export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
                 const startPct = dateToPct(proj.startDate);
                 const endPct = Math.max(startPct + 4, dateToPct(proj.endDate));
                 const reviewPct = dateToPct(proj.reviewDate);
-                const todayPct = dateToPct('2026-11-22');
+                const todayPct = dateToPct(today);
                 const lead = agentMap.get(proj.leadAgentId);
 
                 return (
@@ -369,9 +433,11 @@ export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setYear(2026);
-                    setMonth(10);
-                    setSelectedDate('2026-11-22');
+                    const current = todayLocal();
+                    const { year: y, month: m } = parseLocalDate(current);
+                    setYear(y);
+                    setMonth(m);
+                    setSelectedDate(current);
                   }}
                   className="rounded-xl border border-slate-700/80 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 transition-all hover:border-cyan-500/60 active:scale-95"
                 >
@@ -422,7 +488,7 @@ export const RoadmapCalendarView: React.FC<RoadmapCalendarViewProps> = ({
                 }
                 const dayEvents = eventsByDate.get(cell.dateStr) ?? [];
                 const isSelected = cell.dateStr === selectedDate;
-                const isToday = cell.dateStr === '2026-11-22';
+                const isToday = cell.dateStr === today;
 
                 return (
                   <button
