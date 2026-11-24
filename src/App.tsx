@@ -38,6 +38,7 @@ import { RoadmapCalendarView } from './components/RoadmapCalendarView';
 import { CreateAgentProfileModal } from './components/CreateAgentProfileModal';
 import { AdminView, AdminTab } from './components/AdminView';
 import { EmptyState } from './components/EmptyState';
+import { useAuth } from './components/AuthGate';
 
 const MODULE_HEADERS: Record<
   ActiveModule,
@@ -102,6 +103,7 @@ function apiMessage(err: unknown): string {
 }
 
 export default function App() {
+  const { user: authUser, logout } = useAuth();
   const [activeModule, setActiveModule] = useState<ActiveModule>('kanban');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -483,6 +485,20 @@ export default function App() {
               </span>
             </div>
 
+            {authUser && (
+              <div className="hidden items-center gap-2 text-xs text-slate-400 lg:flex">
+                <span className="max-w-[140px] truncate text-slate-300" title={authUser.email}>
+                  {authUser.displayName}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:border-rose-500/60 hover:text-rose-300"
+                >
+                  Salir
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setActiveModule('colmena3d')}

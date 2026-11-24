@@ -383,6 +383,15 @@ export interface KeyTestResult {
   message: string;
 }
 
+export interface ApiAuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: 'ADMIN' | 'OPERATOR' | 'VIEWER';
+  mustChangePassword: boolean;
+  mfaEnabled: boolean;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown[] };
 }

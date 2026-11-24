@@ -21,6 +21,7 @@ import type {
   ApiSetupStatus,
   ApiSnapshot,
   ApiTicket,
+  ApiAuthUser,
   ApiProject,
   ApiProjectCreate,
   ApiProjectUpdate,
@@ -105,6 +106,12 @@ async function request<T>(
   }
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string } } | null)?.error;
+    // La sesión caducó o hay que cambiar la contraseña temporal: la pantalla de entrada lo gestiona.
+    if (res.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/me') {
+      window.dispatchEvent(new Event('flowclic:unauthenticated'));
+    } else if (res.status === 403 && err?.code === 'PASSWORD_CHANGE_REQUIRED') {
+      window.dispatchEvent(new Event('flowclic:password-change'));
+    }
     throw new ApiError(
       res.status,
       err?.code ?? 'HTTP_ERROR',
@@ -115,6 +122,12 @@ async function request<T>(
 }
 
 export const api = {
+  login: (email: string, password: string) =>
+    request<ApiAuthUser>('POST', '/api/auth/login', { email, password }),
+  me: () => request<ApiAuthUser>('GET', '/api/auth/me'),
+  logout: () => request<void>('POST', '/api/auth/logout'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<ApiAuthUser>('POST', '/api/auth/change-password', { currentPassword, newPassword }),
   setupStatus: () => request<ApiSetupStatus>('GET', '/api/setup/status'),
   snapshot: () => request<ApiSnapshot>('GET', '/api/snapshot'),
 
