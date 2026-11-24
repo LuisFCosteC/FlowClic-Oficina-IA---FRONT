@@ -43,7 +43,10 @@ const slugifyWorkspaceId = (name: string): string =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9_-]/g, '')
-    .slice(0, 32);
+    .replace(/-{2,}/g, '-')
+    .replace(/^[^a-z]+/, '') // el id debe empezar por una letra
+    .slice(0, 32)
+    .replace(/[-_]+$/, '');
 
 export const WorkspacesPanel: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
@@ -134,7 +137,7 @@ export const WorkspacesPanel: React.FC = () => {
 
   const handleNameChange = (val: string) => {
     setForm((prev) => {
-      if (prev.isEditing || prev.idManuallyEdited) {
+      if (prev.isEditing || (prev.idManuallyEdited && prev.id.trim() !== '')) {
         return { ...prev, name: val };
       }
       const proposed = slugifyWorkspaceId(val);
@@ -154,7 +157,8 @@ export const WorkspacesPanel: React.FC = () => {
     setForm((prev) => ({
       ...prev,
       id: val,
-      idManuallyEdited: true,
+      // Si se vacía el ID, vuelve a proponerse solo a partir del nombre.
+      idManuallyEdited: val.trim() !== '',
       idError: isInvalid ? 'Solo minúsculas, números, - y _ (ej. pagina-abogada)' : undefined,
     }));
   };
@@ -447,6 +451,20 @@ export const WorkspacesPanel: React.FC = () => {
 
               <div>
                 <label className="block font-medium text-slate-300">
+                  Nombre descriptivo
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  placeholder="ej. Repositorio Front"
+                  className="mt-1 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300">
                   Identificador (ID)
                 </label>
                 <input
@@ -469,20 +487,6 @@ export const WorkspacesPanel: React.FC = () => {
                     Solo minúsculas, números, - y _ (ej. pagina-abogada)
                   </p>
                 ) : null}
-              </div>
-
-              <div>
-                <label className="block font-medium text-slate-300">
-                  Nombre descriptivo
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="ej. Repositorio Front"
-                  className="mt-1 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                />
               </div>
 
               <div>
