@@ -37,7 +37,6 @@ export type ApiApprovalCategory =
   | 'Despliegue'
   | 'Seguridad'
   | 'Datos';
-export type CredentialProvider = 'anthropic' | 'openai' | 'google' | 'other';
 
 export interface ApiModelInfo {
   id: string;
@@ -271,23 +270,69 @@ export interface ApiTicketCreate {
   estimatedCostUsd?: number;
 }
 
-export interface ApiLoadTeamResult {
-  created: ApiAgent[];
-  skipped: string[];
+export type KeyProvider = 'google' | 'anthropic' | 'openai' | 'other';
+export type KeyStatus = 'ACTIVE' | 'REVOKED' | 'INVALID';
+export type ComputedKeyStatus = 'ACTIVE' | 'IN_USE' | 'EXHAUSTED' | 'INVALID' | 'REVOKED';
+
+export interface UsageTotals {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
 }
 
-/** Metadatos de una conexión API de agente. La clave NUNCA llega al front: solo `last4`. */
-export interface ApiCredential {
+export interface ModelUsage {
+  model: string;
+  today: UsageTotals;
+  total: UsageTotals;
+  exhaustedUntil: string | null;
+  lastErrorCode: string | null;
+  lastUsedAt: string | null;
+}
+
+export interface ExhaustedModel {
+  model: string;
+  until: string;
+}
+
+export interface ProviderKey {
   id: string;
-  agentId: string;
-  provider: CredentialProvider;
+  provider: KeyProvider;
   label: string;
   last4: string;
-  keyVersion: number;
-  createdBy: string;
+  position: number;
+  status: KeyStatus;
+  computedStatus: ComputedKeyStatus;
+  statusLabel: string;
+  exhaustedUntil: string | null;
+  exhaustedModels: ExhaustedModel[];
+  dailyRequestLimit: number | null;
+  dailyTokenLimit: number | null;
+  usageToday: UsageTotals;
+  usageTotal: UsageTotals;
+  usageByModel: ModelUsage[];
+  lastUsedAt: string | null;
   createdAt: string;
   rotatedAt: string | null;
   revokedAt: string | null;
+}
+
+export interface KeyCreate {
+  provider: KeyProvider;
+  label: string;
+  secret: string;
+}
+
+export interface KeyUpdate {
+  label?: string;
+  dailyRequestLimit?: number | null;
+  dailyTokenLimit?: number | null;
+}
+
+export interface KeyTestResult {
+  ok: boolean;
+  status: 'OK' | 'INVALID_KEY' | 'RATE_LIMITED' | 'ERROR';
+  message: string;
 }
 
 export interface ApiErrorBody {

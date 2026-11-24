@@ -4,8 +4,6 @@ import type {
   ApiAgentCreate,
   ApiAgentStatus,
   ApiAgentUpdate,
-  ApiCredential,
-  ApiLoadTeamResult,
   ApiModelInfo,
   ApiProjectSettings,
   ApiLimitsSettings,
@@ -28,7 +26,10 @@ import type {
   ApiWorkspace,
   ApiWorkspaceBody,
   ApiWorkspaceCheck,
-  CredentialProvider,
+  KeyCreate,
+  KeyTestResult,
+  KeyUpdate,
+  ProviderKey,
 } from './types';
 
 /** Error de la API (`{error:{code,message}}`) o de red (`code: 'NETWORK'`, `status: 0`). */
@@ -125,8 +126,6 @@ export const api = {
     request<ApiAgent>('POST', `/api/agents/${encodeURIComponent(id)}/restore`),
   setAgentStatus: (id: string, status: ApiAgentStatus) =>
     request<ApiAgent>('PATCH', `/api/agents/${encodeURIComponent(id)}/status`, { status }),
-  loadBaseTeam: () =>
-    request<ApiLoadTeamResult>('POST', '/api/admin/agents/load-base-team'),
 
   listRules: () => request<ApiRule[]>('GET', '/api/admin/rules'),
   createRule: (body: ApiRuleCreate) => request<ApiRule>('POST', '/api/admin/rules', body),
@@ -178,30 +177,15 @@ export const api = {
   transitionTicket: (id: string, to: ApiTicketStatus) =>
     request<ApiTicket>('POST', `/api/tickets/${encodeURIComponent(id)}/transition`, { to }),
 
-  listCredentials: (agentId: string) =>
-    request<ApiCredential[]>(
-      'GET',
-      `/api/admin/agents/${encodeURIComponent(agentId)}/credentials`
-    ),
-  listAllCredentials: () => request<ApiCredential[]>('GET', '/api/admin/credentials'),
-  addCredential: (
-    agentId: string,
-    body: { provider: CredentialProvider; label: string; secret: string }
-  ) =>
-    request<ApiCredential>(
-      'POST',
-      `/api/admin/agents/${encodeURIComponent(agentId)}/credentials`,
-      body
-    ),
-  rotateCredential: (agentId: string, credId: string, secret: string) =>
-    request<ApiCredential>(
-      'POST',
-      `/api/admin/agents/${encodeURIComponent(agentId)}/credentials/${encodeURIComponent(credId)}/rotate`,
-      { secret }
-    ),
-  revokeCredential: (agentId: string, credId: string) =>
-    request<void>(
-      'DELETE',
-      `/api/admin/agents/${encodeURIComponent(agentId)}/credentials/${encodeURIComponent(credId)}`
-    ),
+  // Bolsa global de claves API (KEY01). La clave nunca vuelve del servidor: solo `last4`.
+  listKeys: () => request<ProviderKey[]>('GET', '/api/admin/keys'),
+  createKey: (body: KeyCreate) => request<ProviderKey>('POST', '/api/admin/keys', body),
+  updateKey: (id: string, body: KeyUpdate) =>
+    request<ProviderKey>('PATCH', `/api/admin/keys/${encodeURIComponent(id)}`, body),
+  reorderKeys: (ids: string[]) => request<ProviderKey[]>('PUT', '/api/admin/keys/order', { ids }),
+  revokeKey: (id: string) => request<void>('DELETE', `/api/admin/keys/${encodeURIComponent(id)}`),
+  reactivateKey: (id: string) =>
+    request<ProviderKey>('POST', `/api/admin/keys/${encodeURIComponent(id)}/reactivate`),
+  testKey: (id: string) =>
+    request<KeyTestResult>('POST', `/api/admin/keys/${encodeURIComponent(id)}/test`),
 };

@@ -1,740 +1,511 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   Cpu,
   Database,
-  Filter,
   KeyRound,
   Loader2,
   Plus,
   RefreshCw,
+  RotateCcw,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react';
-import { api, ApiError, getApiErrorMessage } from '../api/client';
-import { formatDate } from '../api/mappers';
-import type { ApiCredential, ApiModelInfo, CredentialProvider } from '../api/types';
-import type { Agent } from '../types/orbis';
+import { api, getApiErrorMessage } from '../api/client';
+import type {
+  ApiModelInfo,
+  ComputedKeyStatus,
+  KeyProvider,
+  KeyTestResult,
+  ProviderKey,
+} from '../api/types';
 import { AdminErrorCard } from './AdminErrorCard';
 import { DbConnectionPanel } from './DbConnectionPanel';
-import { setModelCatalog } from '../utils/models';
+import { getModelDisplayName, setModelCatalog } from '../utils/models';
 
-const PROVIDER_OPTIONS: Array<{ id: CredentialProvider; label: string }> = [
+const PROVIDER_OPTIONS: Array<{ id: KeyProvider; label: string }> = [
   { id: 'google', label: 'Google / Gemini' },
   { id: 'anthropic', label: 'Anthropic / Claude' },
   { id: 'openai', label: 'OpenAI' },
   { id: 'other', label: 'Otro' },
 ];
 
-const PROVIDER_NAMES: Record<CredentialProvider, string> = {
+const PROVIDER_NAMES: Record<KeyProvider, string> = {
   google: 'Google / Gemini',
   anthropic: 'Anthropic / Claude',
   openai: 'OpenAI',
   other: 'Otro',
 };
 
-interface ConnectionsPanelProps {
-  agents: Agent[];
-}
+const STATUS_CLASS: Record<ComputedKeyStatus, string> = {
+  ACTIVE: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+  IN_USE: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300',
+  EXHAUSTED: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+  INVALID: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+  REVOKED: 'border-slate-600/60 bg-slate-800/60 text-slate-400',
+};
 
-export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({ agents }) => {
-  const [credentials, setCredentials] = useState<ApiCredential[]>([]);
+const REFRESH_MS = 15000;
+
+const fmtTokens = (n: number): string =>
+  n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(1)}M`
+    : n >= 1000
+      ? `${(n / 1000).toFixed(1)}k`
+      : String(n);
+
+const fmtTime = (iso: string): string =>
+  new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+
+export const ConnectionsPanel: React.FC = () => {
+  const [keys, setKeys] = useState<ProviderKey[]>([]);
   const [models, setModels] = useState<ApiModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Formulario Añadir Clave
-  const [addAgentId, setAddAgentId] = useState<string>('');
-  const [addProvider, setAddProvider] = useState<CredentialProvider>('google');
-  const [addLabel, setAddLabel] = useState<string>('');
-  const [addSecret, setAddSecret] = useState<string>('');
-  const [addingError, setAddingError] = useState<string | null>(null);
-  const [addingSuccess, setAddingSuccess] = useState<string | null>(null);
-  const [submittingAdd, setSubmittingAdd] = useState(false);
+  // Alta
+  const [provider, setProvider] = useState<KeyProvider>('google');
+  const [label, setLabel] = useState('');
+  const [secret, setSecret] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  // Filtros de la tabla
-  const [filterProvider, setFilterProvider] = useState<string>('all');
-  const [filterAgentId, setFilterAgentId] = useState<string>('all');
+  // Acciones por fila
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, KeyTestResult>>({});
+  const [revoking, setRevoking] = useState<ProviderKey | null>(null);
+  const aliveRef = useRef(true);
 
-  // Modales de Rotar y Revocar en UI
-  const [rotatingCred, setRotatingCred] = useState<ApiCredential | null>(null);
-  const [rotateSecret, setRotateSecret] = useState<string>('');
-  const [rotatingError, setRotatingError] = useState<string | null>(null);
-  const [submittingRotate, setSubmittingRotate] = useState(false);
-
-  const [revokingCred, setRevokingCred] = useState<ApiCredential | null>(null);
-  const [revokingError, setRevokingError] = useState<string | null>(null);
-  const [submittingRevoke, setSubmittingRevoke] = useState(false);
-
-  // La clave se vacía al desmontar y nunca se guarda en el store ni en el navegador
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      setAddSecret('');
-      setRotateSecret('');
-    };
-  }, []);
-
-  // Seleccionar por defecto el primer agente si está disponible
-  useEffect(() => {
-    if (agents.length > 0 && !addAgentId) {
-      setAddAgentId(agents[0].id);
-    }
-  }, [agents, addAgentId]);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const [creds, mods] = await Promise.all([
-        api.listAllCredentials(),
-        api.listModels(),
-      ]);
-      if (!mounted.current) return;
-      setCredentials(creds);
+      const [list, mods] = await Promise.all([api.listKeys(), api.listModels()]);
+      if (!aliveRef.current) return;
+      setKeys([...list].sort((a, b) => a.position - b.position));
       setModels(mods);
       setModelCatalog(mods);
+      setError(null);
     } catch (err) {
-      if (mounted.current) {
-        setError(getApiErrorMessage(err, 'Error al cargar las conexiones y modelos.'));
-      }
+      if (aliveRef.current) setError(getApiErrorMessage(err, 'Error al cargar las claves API.'));
     } finally {
-      if (mounted.current) setLoading(false);
+      if (aliveRef.current && !silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+    aliveRef.current = true;
+    void load();
+    const timer = window.setInterval(() => void load(true), REFRESH_MS);
+    return () => {
+      aliveRef.current = false;
+      window.clearInterval(timer);
+    };
+  }, [load]);
 
-  // Mapa de agentes para lookup rápido
-  const agentMap = useMemo(() => {
-    const map = new Map<string, Agent>();
-    agents.forEach((a) => map.set(a.id, a));
-    return map;
-  }, [agents]);
-
-  // Filtrado de credenciales activas
-  const filteredCredentials = useMemo(() => {
-    return credentials.filter((c) => {
-      const matchesProvider =
-        filterProvider === 'all' || c.provider === filterProvider;
-      const matchesAgent =
-        filterAgentId === 'all' || c.agentId === filterAgentId;
-      return matchesProvider && matchesAgent;
-    });
-  }, [credentials, filterProvider, filterAgentId]);
-
-  // Envío del formulario Añadir Clave
-  const handleAddSubmit = async (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAddingError(null);
-    setAddingSuccess(null);
-
-    if (!addAgentId) {
-      setAddingError('Debes seleccionar un agente.');
-      return;
-    }
-    if (!addLabel.trim()) {
-      setAddingError('Debes indicar una etiqueta para la clave.');
-      return;
-    }
-    if (!addSecret.trim() || addSecret.trim().length < 8) {
-      setAddingError('La clave API debe tener al menos 8 caracteres.');
-      return;
-    }
-
-    setSubmittingAdd(true);
+    setFormError(null);
+    const value = secret.trim();
+    if (!label.trim()) return setFormError('Escribe una etiqueta (p. ej. «Gemini principal»).');
+    if (value.length < 8) return setFormError('La clave es demasiado corta (mínimo 8 caracteres).');
+    if (/\s/.test(value)) return setFormError('La clave no puede contener espacios.');
+    setSaving(true);
     try {
-      await api.addCredential(addAgentId, {
-        provider: addProvider,
-        label: addLabel.trim(),
-        secret: addSecret.trim(),
-      });
-      // La clave se vacía inmediatamente al guardar
-      setAddSecret('');
-      setAddLabel('');
-      setAddingSuccess('Clave API añadida exitosamente.');
-      window.setTimeout(() => setAddingSuccess(null), 4000);
-      await fetchData();
+      await api.createKey({ provider, label: label.trim(), secret: value });
+      setLabel('');
+      await load(true);
     } catch (err) {
-      setAddSecret('');
-      if (err instanceof ApiError) {
-        if (err.code === 'ENCRYPTION_UNAVAILABLE') {
-          setAddingError(
-            'Bóveda de cifrado no disponible: falta APP_MASTER_KEY en el servidor.'
-          );
-        } else {
-          setAddingError(err.message);
-        }
-      } else {
-        setAddingError('Error al guardar la clave API.');
-      }
+      setFormError(getApiErrorMessage(err, 'No se pudo guardar la clave.'));
     } finally {
-      setSubmittingAdd(false);
+      setSecret(''); // se vacía siempre, con éxito o con error
+      setSaving(false);
     }
   };
 
-  // Envío de Rotar Clave
-  const handleRotateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!rotatingCred) return;
-    setRotatingError(null);
-
-    if (!rotateSecret.trim() || rotateSecret.trim().length < 8) {
-      setRotatingError('La nueva clave API debe tener al menos 8 caracteres.');
-      return;
-    }
-
-    setSubmittingRotate(true);
+  const runRow = async (id: string, fn: () => Promise<unknown>) => {
+    setBusyId(id);
+    setRowError(null);
     try {
-      await api.rotateCredential(
-        rotatingCred.agentId,
-        rotatingCred.id,
-        rotateSecret.trim()
-      );
-      setRotateSecret('');
-      setRotatingCred(null);
-      await fetchData();
+      await fn();
+      await load(true);
     } catch (err) {
-      setRotateSecret('');
-      if (err instanceof ApiError) {
-        setRotatingError(err.message);
-      } else {
-        setRotatingError('Error al rotar la clave API.');
-      }
+      setRowError(getApiErrorMessage(err, 'La operación falló.'));
     } finally {
-      setSubmittingRotate(false);
+      setBusyId(null);
     }
   };
 
-  // Envío de Revocar Clave
-  const handleRevokeSubmit = async () => {
-    if (!revokingCred) return;
-    setRevokingError(null);
-    setSubmittingRevoke(true);
+  const handleTest = async (k: ProviderKey) => {
+    setBusyId(k.id);
+    setRowError(null);
     try {
-      await api.revokeCredential(revokingCred.agentId, revokingCred.id);
-      setRevokingCred(null);
-      await fetchData();
+      const res = await api.testKey(k.id);
+      setTestResults((prev) => ({ ...prev, [k.id]: res }));
     } catch (err) {
-      if (err instanceof ApiError) {
-        setRevokingError(err.message);
-      } else {
-        setRevokingError('Error al revocar la clave API.');
-      }
+      setRowError(getApiErrorMessage(err, 'No se pudo probar la clave.'));
     } finally {
-      setSubmittingRevoke(false);
+      setBusyId(null);
     }
   };
 
-  if (error && credentials.length === 0 && models.length === 0 && !loading) {
-    return (
-      <section className="space-y-6">
-        <AdminErrorCard message={error} onRetry={() => void fetchData()} />
-      </section>
-    );
+  const handleMove = (k: ProviderKey, dir: -1 | 1) => {
+    const live = keys.filter((x) => x.status !== 'REVOKED');
+    const i = live.findIndex((x) => x.id === k.id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= live.length) return;
+    const ids = live.map((x) => x.id);
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    void runRow(k.id, () => api.reorderKeys(ids));
+  };
+
+  const confirmRevoke = async () => {
+    if (!revoking) return;
+    const target = revoking;
+    setRevoking(null);
+    await runRow(target.id, () => api.revokeKey(target.id));
+  };
+
+  if (error && keys.length === 0 && models.length === 0 && !loading) {
+    return <AdminErrorCard message={error} onRetry={() => void load()} />;
   }
 
+  const liveKeys = keys.filter((k) => k.status !== 'REVOKED');
+  const revokedKeys = keys.filter((k) => k.status === 'REVOKED');
+
   return (
-    <div className="space-y-10">
-      {/* =========================================================================
-          SECCIÓN A: Claves API de los agentes (arriba)
-          ========================================================================= */}
-      <section className="space-y-6">
-        <div className="border-b border-slate-800/80 pb-3">
+    <div className="space-y-6">
+      {/* 1. Alta de clave */}
+      <section className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
+        <div className="flex items-center gap-2.5 border-b border-slate-800/80 pb-3">
+          <KeyRound className="h-5 w-5 text-cyan-400" />
+          <h2 className="text-base font-semibold text-slate-100">Claves API (bolsa global)</h2>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Las claves son compartidas por todos los agentes: se usa la primera activa de la lista
+          y, si se agota o falla, pasa a la siguiente. La clave se guarda cifrada y nunca vuelve a
+          mostrarse (solo sus 4 últimos caracteres).
+        </p>
+
+        <form onSubmit={(e) => void handleAdd(e)} className="mt-4 grid gap-3 md:grid-cols-4">
+          <label className="text-xs text-slate-300">
+            Proveedor
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as KeyProvider)}
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+            >
+              {PROVIDER_OPTIONS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-300">
+            Etiqueta
+            <input
+              type="text"
+              name="provider-key-label"
+              autoComplete="off"
+              value={label}
+              maxLength={80}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Gemini principal"
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+            />
+          </label>
+          <label className="text-xs text-slate-300">
+            Clave
+            <input
+              type="password"
+              name="provider-api-key"
+              value={secret}
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              onChange={(e) => setSecret(e.target.value)}
+              placeholder="Pega la clave aquí"
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100"
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-3.5 py-2 text-xs font-medium text-cyan-200 transition-all hover:bg-cyan-500/20 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Añadir clave
+            </button>
+          </div>
+        </form>
+        {formError && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {formError}
+          </div>
+        )}
+      </section>
+
+      {/* 2. Lista por prioridad */}
+      <section className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 px-5 py-3.5">
           <div className="flex items-center gap-2.5">
-            <KeyRound className="h-5 w-5 text-cyan-400" />
-            <h2 className="text-base font-semibold text-slate-100">
-              Claves API de los agentes
-            </h2>
+            <h3 className="text-sm font-semibold text-slate-100">Claves por orden de prioridad</h3>
+            <span className="font-mono text-xs text-slate-400">{liveKeys.length}</span>
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />}
           </div>
-          <p className="mt-1 text-xs text-slate-400">
-            Configura y administra las credenciales seguras de IA asociadas a cada agente del equipo.
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-3 py-1.5 text-xs text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Actualizar
+          </button>
+        </div>
+
+        {rowError && (
+          <div className="m-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300">
+            {rowError}
+          </div>
+        )}
+
+        {keys.length === 0 && !loading ? (
+          <p className="p-8 text-center text-xs text-slate-500">
+            Aún no hay claves. Añade la primera arriba para que los agentes puedan trabajar.
           </p>
-        </div>
-
-        {/* 1. Formulario Añadir clave */}
-        <div className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
-          <div className="border-b border-slate-800/80 pb-3 mb-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
-              Añadir clave API
-            </h3>
-            <p className="mt-0.5 text-[11px] text-slate-400">
-              La clave se almacena cifrada en la bóveda del servidor y nunca se expone en el navegador.
-            </p>
-          </div>
-
-          {agents.length === 0 ? (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
-              <span>Crea primero un agente en la pestaña Agentes</span>
-            </div>
-          ) : (
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              {addingError && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-                  <span>{addingError}</span>
-                </div>
-              )}
-
-              {addingSuccess && (
-                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-300 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                  <span>{addingSuccess}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {/* Selector de Agente */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300">
-                    Agente <span className="text-cyan-400">*</span>
-                  </label>
-                  <select
-                    value={addAgentId}
-                    onChange={(e) => setAddAgentId(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  >
-                    {agents.map((ag) => (
-                      <option key={ag.id} value={ag.id}>
-                        {ag.name} ({ag.title || ag.roleType || 'Agente'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Selector de Proveedor */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300">
-                    Proveedor <span className="text-cyan-400">*</span>
-                  </label>
-                  <select
-                    value={addProvider}
-                    onChange={(e) => setAddProvider(e.target.value as CredentialProvider)}
-                    className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  >
-                    {PROVIDER_OPTIONS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Input Etiqueta */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300">
-                    Etiqueta descriptiva <span className="text-cyan-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={addLabel}
-                    onChange={(e) => setAddLabel(e.target.value)}
-                    placeholder="ej. Gemini Pro Principal"
-                    className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                  />
-                </div>
-
-                {/* Input Clave */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-300">
-                    Clave de API <span className="text-cyan-400">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={addSecret}
-                    onChange={(e) => setAddSecret(e.target.value)}
-                    placeholder="••••••••••••••••••••"
-                    className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={submittingAdd}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-4 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:from-cyan-300 hover:to-sky-300 disabled:opacity-50"
-                >
-                  {submittingAdd ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Guardando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Guardar clave</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-
-        {/* 2. Tabla de todas las claves activas con Filtros */}
-        <div className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 px-5 py-3.5">
-            <div className="flex items-center gap-2.5">
-              <KeyRound className="h-4 w-4 text-cyan-400" />
-              <h3 className="text-sm font-semibold text-slate-100">
-                Claves API activas
-              </h3>
-              <span className="font-mono text-xs text-slate-400">
-                {filteredCredentials.length}
-              </span>
-              {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Filtro por Proveedor */}
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <Filter className="h-3.5 w-3.5 text-slate-500" />
-                <select
-                  aria-label="Filtrar por proveedor"
-                  value={filterProvider}
-                  onChange={(e) => setFilterProvider(e.target.value)}
-                  className="rounded-xl border border-slate-700/80 bg-slate-900/90 px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
-                >
-                  <option value="all">Todos los proveedores</option>
-                  <option value="google">Google / Gemini</option>
-                  <option value="anthropic">Anthropic / Claude</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="other">Otro</option>
-                </select>
-              </div>
-
-              {/* Filtro por Agente */}
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <select
-                  aria-label="Filtrar por agente"
-                  value={filterAgentId}
-                  onChange={(e) => setFilterAgentId(e.target.value)}
-                  className="rounded-xl border border-slate-700/80 bg-slate-900/90 px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
-                >
-                  <option value="all">Todos los agentes</option>
-                  {agents.map((ag) => (
-                    <option key={ag.id} value={ag.id}>
-                      {ag.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void fetchData()}
-                disabled={loading}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200 disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-                <span>Actualizar</span>
-              </button>
-            </div>
-          </div>
-
-          {filteredCredentials.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-500">
-              {credentials.length === 0
-                ? 'No hay claves API registradas en el sistema. Añade una arriba.'
-                : 'No se encontraron claves API con los filtros seleccionados.'}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-left text-xs">
-                <thead className="border-b border-slate-800 text-[11px] uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-5 py-2.5 font-medium">Agente</th>
-                    <th className="px-3 py-2.5 font-medium">Proveedor</th>
-                    <th className="px-3 py-2.5 font-medium">Etiqueta</th>
-                    <th className="px-3 py-2.5 font-medium">Clave</th>
-                    <th className="px-3 py-2.5 font-medium">Creada</th>
-                    <th className="px-3 py-2.5 font-medium">Rotada</th>
-                    <th className="px-5 py-2.5 text-right font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70">
-                  {filteredCredentials.map((c) => {
-                    const agent = agentMap.get(c.agentId);
-                    return (
-                      <tr key={c.id} className="text-slate-200 transition-colors hover:bg-slate-900/40">
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: agent?.color || '#06B6D4' }}
-                            />
-                            <span className="font-medium text-slate-100">
-                              {agent?.name || c.agentId}
-                            </span>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-xs">
+              <thead className="text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-2.5 font-medium">Prioridad</th>
+                  <th className="px-3 py-2.5 font-medium">Proveedor</th>
+                  <th className="px-3 py-2.5 font-medium">Etiqueta</th>
+                  <th className="px-3 py-2.5 font-medium">Clave</th>
+                  <th className="px-3 py-2.5 font-medium">Estado</th>
+                  <th className="px-3 py-2.5 font-medium">Uso de hoy</th>
+                  <th className="px-5 py-2.5 text-right font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/70">
+                {[...liveKeys, ...revokedKeys].map((k) => {
+                  const idx = liveKeys.findIndex((x) => x.id === k.id);
+                  const revoked = k.status === 'REVOKED';
+                  const busy = busyId === k.id;
+                  const test = testResults[k.id];
+                  return (
+                    <tr key={k.id} className={`text-slate-200 ${revoked ? 'opacity-60' : ''}`}>
+                      <td className="px-5 py-3 font-mono text-slate-300">
+                        {revoked ? '—' : `#${idx + 1}`}
+                      </td>
+                      <td className="px-3 py-3 text-slate-300">{PROVIDER_NAMES[k.provider]}</td>
+                      <td className="px-3 py-3">{k.label}</td>
+                      <td className="px-3 py-3 font-mono text-slate-400">••••{k.last4}</td>
+                      <td className="px-3 py-3">
+                        <span
+                          className={`inline-block rounded-md border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLASS[k.computedStatus]}`}
+                        >
+                          {k.statusLabel}
+                        </span>
+                        {k.computedStatus !== 'EXHAUSTED' &&
+                          k.exhaustedModels.map((m) => (
+                            <div key={m.model} className="mt-1 text-[10px] text-amber-400">
+                              {getModelDisplayName(m.model)} agotado hasta {fmtTime(m.until)}
+                            </div>
+                          ))}
+                        {test && (
+                          <div
+                            className={`mt-1 flex items-center gap-1 text-[10px] ${
+                              test.ok ? 'text-emerald-400' : 'text-rose-400'
+                            }`}
+                          >
+                            {test.ok ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : (
+                              <AlertCircle className="h-3 w-3" />
+                            )}
+                            {test.message}
                           </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="inline-flex rounded-md border border-slate-700/80 bg-slate-900/80 px-2 py-0.5 text-[11px] text-slate-300">
-                            {PROVIDER_NAMES[c.provider] || c.provider}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-slate-300">{c.label}</td>
-                        <td className="px-3 py-3 font-mono text-[11px] text-slate-400">
-                          ••••{c.last4}
-                        </td>
-                        <td className="px-3 py-3 text-slate-400">
-                          {formatDate(c.createdAt)}
-                        </td>
-                        <td className="px-3 py-3 text-slate-400">
-                          {c.rotatedAt ? formatDate(c.rotatedAt) : 'Nunca'}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-400">
+                        <div className="font-mono">
+                          {k.usageToday.requests} pet. ·{' '}
+                          {fmtTokens(k.usageToday.inputTokens + k.usageToday.outputTokens)} tokens
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          ${k.usageToday.costUsd.toFixed(4)}
+                          {k.dailyRequestLimit ? ` · límite ${k.dailyRequestLimit} pet.` : ''}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {!revoked && (
+                            <>
+                              <button
+                                type="button"
+                                aria-label="Subir prioridad"
+                                title="Subir prioridad"
+                                disabled={busy || idx === 0}
+                                onClick={() => handleMove(k, -1)}
+                                className="rounded-lg border border-slate-700/80 p-1.5 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200 disabled:opacity-30"
+                              >
+                                <ArrowUp className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Bajar prioridad"
+                                title="Bajar prioridad"
+                                disabled={busy || idx === liveKeys.length - 1}
+                                onClick={() => handleMove(k, 1)}
+                                className="rounded-lg border border-slate-700/80 p-1.5 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200 disabled:opacity-30"
+                              >
+                                <ArrowDown className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void handleTest(k)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200 disabled:opacity-50"
+                              >
+                                {busy ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Zap className="h-3 w-3" />
+                                )}
+                                Probar
+                              </button>
+                            </>
+                          )}
+                          {(revoked ||
+                            k.status === 'INVALID' ||
+                            k.computedStatus === 'EXHAUSTED') && (
                             <button
                               type="button"
-                              onClick={() => {
-                                setRotatingCred(c);
-                                setRotateSecret('');
-                                setRotatingError(null);
-                              }}
-                              className="flex items-center gap-1 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 transition-colors hover:bg-cyan-500/20"
+                              disabled={busy}
+                              onClick={() => void runRow(k.id, () => api.reactivateKey(k.id))}
+                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-700/80 bg-emerald-950/20 px-2.5 py-1 text-[11px] text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-50"
                             >
-                              <RefreshCw className="h-3 w-3" />
-                              <span>Rotar</span>
+                              <RotateCcw className="h-3 w-3" />
+                              Reactivar
                             </button>
+                          )}
+                          {!revoked && (
                             <button
                               type="button"
-                              onClick={() => {
-                                setRevokingCred(c);
-                                setRevokingError(null);
-                              }}
-                              className="flex items-center gap-1 rounded-lg border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-300 transition-colors hover:bg-rose-500/20"
+                              disabled={busy}
+                              onClick={() => setRevoking(k)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-900/60 bg-rose-950/20 px-2.5 py-1 text-[11px] text-rose-300 hover:bg-rose-900/40 disabled:opacity-50"
                             >
                               <Trash2 className="h-3 w-3" />
-                              <span>Revocar</span>
+                              Revocar
                             </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* 3. Modelos disponibles en el catálogo (GET /api/models) */}
-        <div className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5 space-y-3">
-          <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2.5">
-            <Cpu className="h-4 w-4 text-cyan-400" />
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
-              Modelos disponibles en el catálogo
-            </h3>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+        )}
+      </section>
 
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {models.map((m) => (
-              <div
-                key={m.id}
-                className={`rounded-xl border p-3 transition-colors ${
+      {/* 3. Catálogo de modelos (GET /api/models) */}
+      <section className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
+        <div className="flex items-center gap-2.5 border-b border-slate-800/80 pb-3">
+          <Cpu className="h-5 w-5 text-cyan-400" />
+          <h3 className="text-sm font-semibold text-slate-100">Modelos disponibles</h3>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {models.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center justify-between rounded-xl border border-slate-800/80 bg-slate-900/60 px-3.5 py-2.5"
+            >
+              <div>
+                <div className="text-xs font-medium text-slate-100">{m.label}</div>
+                <div className="font-mono text-[10px] text-slate-500">{m.provider}</div>
+              </div>
+              <span
+                className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${
                   m.hasConnection
-                    ? 'border-emerald-500/30 bg-emerald-950/10 text-emerald-200'
-                    : 'border-slate-800 bg-slate-900/40 text-slate-300'
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                    : 'border-slate-600/60 bg-slate-800/60 text-slate-400'
                 }`}
               >
-                <div className="flex items-start justify-between gap-1.5">
-                  <span className="text-xs font-semibold">{m.label}</span>
-                  <span
-                    className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
-                      m.hasConnection
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {m.hasConnection ? 'conectado' : 'sin conexión'}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-                  <span className="capitalize">{m.provider}</span>
-                  <span className="font-mono">{m.id}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+                {m.hasConnection ? 'Con clave' : 'Sin clave'}
+              </span>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* =========================================================================
-          SECCIÓN B: Base de datos (abajo)
-          ========================================================================= */}
-      <section className="space-y-6 pt-4 border-t border-slate-800/90">
+      {/* 4. Base de datos */}
+      <section className="rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5">
         <div className="border-b border-slate-800/80 pb-3">
           <div className="flex items-center gap-2.5">
             <Database className="h-5 w-5 text-cyan-400" />
-            <h2 className="text-base font-semibold text-slate-100">
-              Base de datos
-            </h2>
+            <h2 className="text-base font-semibold text-slate-100">Base de datos</h2>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Estado de conexión, copias de seguridad manuales y conmutación en caliente de base de datos.
+            Estado de conexión, copias de seguridad manuales y conmutación en caliente de base de
+            datos.
           </p>
         </div>
-
-        {/* Panel completo de Base de Datos */}
         <DbConnectionPanel />
       </section>
 
-      {/* =========================================================================
-          MODAL ROTAR CLAVE EN UI
-          ========================================================================= */}
-      {rotatingCred && (
+      {/* Confirmación de revocar (sin window.confirm) */}
+      {revoking && (
         <div
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
         >
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-[#0B1220] p-6 shadow-2xl text-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-cyan-400">
-                <RefreshCw className="h-4 w-4" />
-                <h3 className="text-sm font-semibold text-slate-100">
-                  Rotar clave API
-                </h3>
-              </div>
+          <div className="w-full max-w-md rounded-2xl border border-rose-900/60 bg-[#0B132B] p-6 shadow-2xl">
+            <div className="flex items-start justify-between">
+              <h3 className="text-sm font-semibold text-slate-100">¿Revocar esta clave?</h3>
               <button
                 type="button"
-                onClick={() => {
-                  setRotatingCred(null);
-                  setRotateSecret('');
-                }}
-                className="text-slate-400 hover:text-slate-200"
+                aria-label="Cerrar"
+                onClick={() => setRevoking(null)}
+                className="text-slate-500 hover:text-slate-300"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-
-            <form onSubmit={handleRotateSubmit} className="mt-4 space-y-4 text-xs">
-              <p className="text-slate-300">
-                Introduce la nueva clave para{' '}
-                <strong className="text-cyan-300">{rotatingCred.label}</strong> (agente:{' '}
-                <span className="text-slate-200">
-                  {agentMap.get(rotatingCred.agentId)?.name || rotatingCred.agentId}
-                </span>
-                ). La clave actual (••••{rotatingCred.last4}) será reemplazada.
-              </p>
-
-              {rotatingError && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-rose-300">
-                  {rotatingError}
-                </div>
-              )}
-
-              <div>
-                <label className="block font-medium text-slate-300">
-                  Nueva clave de API <span className="text-cyan-400">*</span>
-                </label>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  required
-                  value={rotateSecret}
-                  onChange={(e) => setRotateSecret(e.target.value)}
-                  placeholder="••••••••••••••••••••"
-                  className="mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRotatingCred(null);
-                    setRotateSecret('');
-                  }}
-                  className="rounded-xl border border-slate-700 px-3.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingRotate}
-                  className="flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
-                >
-                  {submittingRotate && <Loader2 className="h-3 w-3 animate-spin" />}
-                  <span>Confirmar rotación</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          MODAL REVOCAR CLAVE EN UI
-          ========================================================================= */}
-      {revokingCred && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-rose-500/40 bg-[#0B1220] p-6 shadow-2xl text-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-rose-400">
-                <Trash2 className="h-4 w-4" />
-                <h3 className="text-sm font-semibold text-slate-100">
-                  Revocar clave API
-                </h3>
-              </div>
+            <p className="mt-2 text-xs text-slate-400">
+              «{revoking.label}» (••••{revoking.last4}) dejará de usarse. Podrás reactivarla
+              después.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setRevokingCred(null)}
-                className="text-slate-400 hover:text-slate-200"
+                onClick={() => setRevoking(null)}
+                className="rounded-xl border border-slate-700/80 px-4 py-2 text-xs text-slate-300 hover:text-white"
               >
-                <X className="h-4 w-4" />
+                Cancelar
               </button>
-            </div>
-
-            <div className="mt-4 space-y-4 text-xs">
-              <p className="text-slate-300 leading-relaxed">
-                ¿Estás seguro de que deseas revocar la clave{' '}
-                <strong className="text-rose-300">«{revokingCred.label}»</strong> (••••
-                {revokingCred.last4}) del agente{' '}
-                <strong className="text-slate-100">
-                  {agentMap.get(revokingCred.agentId)?.name || revokingCred.agentId}
-                </strong>
-                ? Las operaciones que dependan de este proveedor fallarán hasta configurar una
-                nueva clave.
-              </p>
-
-              {revokingError && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-rose-300">
-                  {revokingError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setRevokingCred(null)}
-                  className="rounded-xl border border-slate-700 px-3.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleRevokeSubmit()}
-                  disabled={submittingRevoke}
-                  className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
-                >
-                  {submittingRevoke && <Loader2 className="h-3 w-3 animate-spin" />}
-                  <span>Confirmar revocación</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => void confirmRevoke()}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-500"
+              >
+                Revocar clave
+              </button>
             </div>
           </div>
         </div>

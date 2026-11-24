@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Archive,
-  ChevronDown,
-  ChevronRight,
   Database,
   Loader2,
   Pencil,
@@ -18,7 +16,6 @@ import { agentFromApi, formatDate } from '../api/mappers';
 import { Agent } from '../types/orbis';
 import { STATUS_META } from '../data/initialData';
 import { getModelDisplayName } from '../utils/models';
-import { AgentCredentialsPanel } from './AgentCredentialsPanel';
 import { AuditPanel } from './AuditPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { LimitsPanel } from './LimitsPanel';
@@ -76,7 +73,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setTab(t);
     onTabChange?.(t);
   };
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // ADM03: Agentes archivados y gestión
   const [showArchived, setShowArchived] = useState(false);
@@ -275,7 +271,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <tbody className="divide-y divide-slate-800/70">
                     {displayedAgents.map((a) => {
                       const st = STATUS_META[a.status];
-                      const open = expandedId === a.id;
                       const isArchived = Boolean(a.archivedAt);
                       return (
                         <React.Fragment key={a.id}>
@@ -351,29 +346,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                                   </button>
                                 )}
 
-                                <button
-                                  type="button"
-                                  aria-expanded={open}
-                                  onClick={() => setExpandedId(open ? null : a.id)}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200"
-                                >
-                                  {open ? (
-                                    <ChevronDown className="h-3 w-3" />
-                                  ) : (
-                                    <ChevronRight className="h-3 w-3" />
-                                  )}
-                                  {open ? 'Ocultar' : 'Gestionar'}
-                                </button>
                               </div>
                             </td>
                           </tr>
-                          {open && (
-                            <tr>
-                              <td colSpan={6} className="bg-[#080D18]/60 px-5 py-4">
-                                <AgentCredentialsPanel agentId={a.id} agentName={a.name} />
-                              </td>
-                            </tr>
-                          )}
                         </React.Fragment>
                       );
                     })}
@@ -387,7 +362,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         )}
 
         {tab === 'connections' && (
-          <ConnectionsPanel agents={displayedAgents.length > 0 ? displayedAgents : agents} />
+          <ConnectionsPanel />
         )}
 
         {tab === 'workspaces' && <WorkspacesPanel />}
