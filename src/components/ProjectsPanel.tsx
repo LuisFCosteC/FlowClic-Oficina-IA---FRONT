@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Layers,
   Loader2,
+  Pencil,
   Plus,
   RotateCcw,
   Search,
@@ -228,6 +229,7 @@ interface ProjectsPanelProps {
 }
 
 export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjectChange }) => {
+  const [modalOpen, setModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | 'new'>('new');
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
@@ -273,38 +275,51 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjec
   );
   const dirty = selected ? !sameDraft(draft, draftOf(selected)) : draft.name.trim() !== '';
 
-  const select = (p: ApiProject | 'new') => {
+  const resetTransient = () => {
     setError(null);
     setIdError(null);
     setWsError(null);
     setSaved(false);
     setAssignId('');
-    setNewWs((w) => ({ ...w, open: false }));
-    if (p === 'new') {
-      setSelectedId('new');
-      setDraft(EMPTY_DRAFT);
-    } else {
-      setSelectedId(p.id);
-      setDraft(draftOf(p));
-    }
+    setNewWs({ open: false, name: '', id: '', idTouched: false, path: '', kind: 'other' });
   };
 
-  // Primer proyecto activo por defecto.
+  const openCreate = () => {
+    resetTransient();
+    setSelectedId('new');
+    setDraft(EMPTY_DRAFT);
+    setModalOpen(true);
+  };
+
+  const openEdit = (p: ApiProject) => {
+    resetTransient();
+    setSelectedId(p.id);
+    setDraft(draftOf(p));
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    resetTransient();
+  };
+
+  // Escape cierra el modal.
   useEffect(() => {
-    if (selectedId === 'new' && draft === EMPTY_DRAFT && projects.length > 0) {
-      const first = projects.find((p) => p.status === 'ACTIVE') ?? projects[0];
-      setSelectedId(first.id);
-      setDraft(draftOf(first));
-    }
-  }, [projects, selectedId, draft]);
+    if (!modalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [modalOpen]);
 
   const listed = useMemo(() => {
     const q = search.trim().toLowerCase();
     return [...projects]
-      .filter((p) => showArchived || p.status === 'ACTIVE' || p.id === selectedId)
+      .filter((p) => showArchived || p.status === 'ACTIVE')
       .filter((p) => !q || p.name.toLowerCase().includes(q) || p.id.includes(q))
       .sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  }, [projects, showArchived, search, selectedId]);
+  }, [projects, showArchived, search]);
 
   const wsOf = (projectId: string) => workspaces.filter((w) => w.projectId === projectId);
 
@@ -346,6 +361,7 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjec
         ? await api.updateProject(selected.id, body)
         : await api.createProject({ id: draft.id.trim(), ...body });
       onProjectChange(result);
+      // Tras crear, el modal pasa a modo edición para poder añadir espacios de trabajo.
       setSelectedId(result.id);
       setDraft(draftOf(result));
       setSaved(true);
@@ -440,540 +456,593 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjec
     'mt-1.5 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none';
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      {/* ───────── Izquierda: editor del proyecto ───────── */}
-      <section className="overflow-hidden rounded-2xl border border-slate-800/80 bg-[#0A1120]/90">
-        {/* Cabecera del proyecto */}
-        <div className="relative border-b border-slate-800/80 bg-gradient-to-br from-cyan-500/[0.07] via-transparent to-transparent px-6 py-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-lg font-bold text-slate-950 shadow-lg ${
-                  selected ? avatarOf(selected.id) : 'from-slate-600 to-slate-700'
-                }`}
-              >
-                {selected ? initials(selected.name) : <FolderKanban className="h-6 w-6 text-slate-300" />}
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-base font-semibold text-slate-50">
-                    {selected ? selected.name : 'Nuevo proyecto'}
-                  </h2>
-                  {selected && (
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                        archivedSelected
-                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                      }`}
-                    >
-                      {archivedSelected ? 'Archivado' : 'Activo'}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-0.5 font-mono text-[11px] text-cyan-400">
-                  {selected ? selected.id : 'Define el nombre y el identificador'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {selected && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionError(null);
-                    setConfirm(selected);
-                  }}
-                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs ${
-                    archivedSelected
-                      ? 'border-emerald-700/80 bg-emerald-950/20 text-emerald-300 hover:bg-emerald-900/40'
-                      : 'border-amber-900/60 bg-amber-950/20 text-amber-300 hover:bg-amber-900/40'
-                  }`}
-                >
-                  {archivedSelected ? (
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  ) : (
-                    <Archive className="h-3.5 w-3.5" />
-                  )}
-                  {archivedSelected ? 'Restaurar' : 'Archivar'}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => select('new')}
-                className="flex items-center gap-1.5 rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-3.5 py-1.5 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Nuevo proyecto
-              </button>
-            </div>
-          </div>
-
-          {selected && (
-            <div className="mt-4 grid grid-cols-3 gap-2.5 sm:max-w-md">
-              <Stat value={wsOf(selected.id).length} label="Espacios" />
-              <Stat value={draft.goals.length} label="Objetivos" />
-              <Stat value={draft.stack.length} label="Tecnologías" />
-            </div>
-          )}
-        </div>
-
-        <form onSubmit={(e) => void save(e)} className="text-xs">
-          <div className="space-y-4 p-6">
-            {error && (
-              <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-rose-300">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                {error}
-              </div>
-            )}
-
-            {/* Información general */}
-            <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
-              <SectionTitle
-                icon={<FolderKanban className="h-3.5 w-3.5" />}
-                title="Información general"
-                hint="Nombre, identificador y descripción del proyecto."
-              />
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block font-medium text-slate-300">
-                  Nombre del proyecto
-                  <input
-                    type="text"
-                    maxLength={120}
-                    value={draft.name}
-                    onChange={(e) => onNameChange(e.target.value)}
-                    placeholder="ej. Página de la abogada"
-                    className={inputCls}
-                  />
-                </label>
-                <label className="block font-medium text-slate-300">
-                  Identificador (ID)
-                  <input
-                    type="text"
-                    disabled={!!selected}
-                    value={draft.id}
-                    onChange={(e) => onIdChange(e.target.value)}
-                    placeholder="ej. pagina-abogada"
-                    className={`${inputCls} font-mono disabled:opacity-60 ${
-                      idError ? '!border-rose-500/80' : ''
-                    }`}
-                  />
-                  <span
-                    className={`mt-1 block text-[11px] ${idError ? 'text-rose-400' : 'text-slate-500'}`}
-                  >
-                    {idError ?? (selected ? 'El ID no se puede cambiar.' : ID_HINT)}
-                  </span>
-                </label>
-              </div>
-              <label className="mt-4 block font-medium text-slate-300">
-                Descripción
-                <textarea
-                  rows={3}
-                  maxLength={2000}
-                  value={draft.description}
-                  onChange={(e) => {
-                    setSaved(false);
-                    setDraft((d) => ({ ...d, description: e.target.value }));
-                  }}
-                  placeholder="Describe el propósito general y el alcance del proyecto…"
-                  className={`${inputCls} resize-y`}
-                />
-                <span className="mt-1 block text-right font-mono text-[10px] text-slate-500">
-                  {draft.description.length}/2000
-                </span>
-              </label>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              {/* Objetivos */}
-              <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
-                <SectionTitle
-                  icon={<Target className="h-3.5 w-3.5" />}
-                  title="Objetivos"
-                  hint="Qué debe lograr el proyecto."
-                />
-                <div className="mt-4">
-                  <ChipList
-                    items={draft.goals}
-                    onChange={(goals) => {
-                      setSaved(false);
-                      setDraft((d) => ({ ...d, goals }));
-                    }}
-                    placeholder="Nuevo objetivo (Enter)…"
-                    max={20}
-                    maxLen={200}
-                    numbered
-                  />
-                </div>
-              </div>
-
-              {/* Stack */}
-              <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
-                <SectionTitle
-                  icon={<Layers className="h-3.5 w-3.5" />}
-                  title="Stack tecnológico"
-                  hint="Lenguajes, frameworks y servicios."
-                />
-                <div className="mt-4">
-                  <ChipList
-                    items={draft.stack}
-                    onChange={(stack) => {
-                      setSaved(false);
-                      setDraft((d) => ({ ...d, stack }));
-                    }}
-                    placeholder="ej. Python, FastAPI, React…"
-                    max={30}
-                    maxLen={60}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Barra de guardado */}
-          <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 bg-[#0A1120]/95 px-6 py-3.5 backdrop-blur">
-            <div className="text-[11px]">
-              {saving ? (
-                <span className="text-slate-400">Guardando…</span>
-              ) : saved && !dirty ? (
-                <span className="inline-flex items-center gap-1.5 text-emerald-400">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Cambios guardados
-                </span>
-              ) : dirty ? (
-                <span className="inline-flex items-center gap-1.5 text-amber-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                  Cambios sin guardar
-                </span>
-              ) : (
-                <span className="text-slate-500">Sin cambios</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={discard}
-                disabled={!dirty || saving}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-3.5 py-2 text-slate-300 hover:text-white disabled:opacity-40"
-              >
-                <Undo2 className="h-3.5 w-3.5" />
-                Descartar
-              </button>
-              <button
-                type="submit"
-                disabled={saving || !dirty}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-6 py-2 font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 disabled:opacity-40 disabled:hover:translate-y-0"
-              >
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {selected ? 'Guardar cambios' : 'Crear proyecto'}
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Espacios de trabajo del proyecto */}
-        <div className="border-t border-slate-800/80 p-6 text-xs">
-          <SectionTitle
-            icon={<Folder className="h-3.5 w-3.5" />}
-            title="Espacios de trabajo"
-            hint="Carpetas del servidor que pertenecen a este proyecto."
-            right={
-              selected && (
-                <span className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-0.5 font-mono text-[11px] text-slate-300">
-                  {wsOf(selected.id).length}
-                </span>
-              )
-            }
-          />
-
-          {!selected ? (
-            <p className="mt-4 rounded-xl border border-dashed border-slate-800 px-4 py-6 text-center text-slate-500">
-              Guarda el proyecto para poder añadirle espacios de trabajo.
+    <div className="space-y-5">
+      {/* ───────── Barra superior: título, buscador y crear ───────── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+            <FolderKanban className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">Proyectos</h2>
+            <p className="text-[11px] text-slate-500">
+              {activeCount} activos · {projects.length - activeCount} archivados
             </p>
-          ) : (
-            <>
-              {wsError && (
-                <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-rose-300">
-                  {wsError}
-                </div>
-              )}
-
-              {wsOf(selected.id).length === 0 ? (
-                <p className="mt-4 rounded-xl border border-dashed border-slate-800 px-4 py-6 text-center text-slate-500">
-                  Este proyecto aún no tiene espacios de trabajo. Asigna uno existente o crea uno nuevo.
-                </p>
-              ) : (
-                <ul className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                  {wsOf(selected.id).map((w) => {
-                    const kind = w.kind ?? 'other';
-                    return (
-                      <li
-                        key={w.id}
-                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-[#070B14] p-3.5 transition-colors hover:border-slate-700"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate font-mono font-medium text-cyan-300">{w.id}</span>
-                            <span
-                              className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${KIND_STYLE[kind]}`}
-                            >
-                              {WORKSPACE_KINDS.find((k) => k.id === kind)?.label ?? 'Otro'}
-                            </span>
-                          </div>
-                          <div className="mt-0.5 text-slate-300">{w.name}</div>
-                          <div
-                            className="mt-1.5 truncate rounded-md bg-slate-950/70 px-2 py-1 font-mono text-[10px] text-slate-500"
-                            title={w.path}
-                          >
-                            {w.path}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={wsBusy}
-                          onClick={() => void putWorkspace(w, null)}
-                          className="self-end rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-400 hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
-                        >
-                          Quitar del proyecto
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              {/* Asignar uno existente / crear */}
-              <div className="mt-4 rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-4">
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="block min-w-[220px] flex-1 font-medium text-slate-300">
-                    Asignar un espacio existente
-                    <select
-                      value={assignId}
-                      onChange={(e) => setAssignId(e.target.value)}
-                      className={inputCls}
-                    >
-                      <option value="">Selecciona un espacio…</option>
-                      {unassigned.length > 0 && (
-                        <optgroup label="Sin proyecto">
-                          {unassigned.map((w) => (
-                            <option key={w.id} value={w.id}>
-                              {w.id} — {w.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {otherProject.length > 0 && (
-                        <optgroup label="De otro proyecto (se mueve)">
-                          {otherProject.map((w) => (
-                            <option key={w.id} value={w.id}>
-                              {w.id} — {projectNameById.get(w.projectId ?? '') ?? w.projectId}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!assignId || wsBusy}
-                    onClick={() => void assign()}
-                    className="rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-4 py-2.5 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40"
-                  >
-                    Asignar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewWs((w) => ({ ...w, open: !w.open }))}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Crear espacio nuevo
-                  </button>
-                </div>
-
-                {newWs.open && (
-                  <div className="mt-4 grid gap-3 border-t border-slate-800 pt-4 sm:grid-cols-2">
-                    <label className="block font-medium text-slate-300">
-                      Nombre
-                      <input
-                        type="text"
-                        value={newWs.name}
-                        onChange={(e) =>
-                          setNewWs((w) => ({
-                            ...w,
-                            name: e.target.value,
-                            id: w.idTouched ? w.id : slugify(e.target.value),
-                          }))
-                        }
-                        placeholder="ej. Repositorio Front"
-                        className={inputCls}
-                      />
-                    </label>
-                    <label className="block font-medium text-slate-300">
-                      ID
-                      <input
-                        type="text"
-                        value={newWs.id}
-                        onChange={(e) =>
-                          setNewWs((w) => ({
-                            ...w,
-                            id: e.target.value,
-                            idTouched: e.target.value.trim() !== '',
-                          }))
-                        }
-                        className={`${inputCls} font-mono`}
-                      />
-                    </label>
-                    <label className="block font-medium text-slate-300">
-                      Tipo de carpeta
-                      <select
-                        value={newWs.kind}
-                        onChange={(e) =>
-                          setNewWs((w) => ({ ...w, kind: e.target.value as ApiWorkspaceKind }))
-                        }
-                        className={inputCls}
-                      >
-                        {WORKSPACE_KINDS.map((k) => (
-                          <option key={k.id} value={k.id}>
-                            {k.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block font-medium text-slate-300">
-                      Ruta local en el servidor
-                      <input
-                        type="text"
-                        value={newWs.path}
-                        onChange={(e) => setNewWs((w) => ({ ...w, path: e.target.value }))}
-                        placeholder="ej. D:\proyectos\mi-proyecto"
-                        className={`${inputCls} font-mono`}
-                      />
-                    </label>
-                    <div className="flex justify-end sm:col-span-2">
-                      <button
-                        type="button"
-                        disabled={wsBusy}
-                        onClick={() => void createWs()}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
-                      >
-                        {wsBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                        Crear y asignar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* ───────── Derecha: todos los proyectos (scroll interno) ───────── */}
-      <aside className="flex max-h-[calc(100vh-170px)] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 lg:sticky lg:top-0">
-        <div className="border-b border-slate-800/80 px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-100">Proyectos</h3>
-              <p className="text-[11px] text-slate-500">
-                {activeCount} activos · {projects.length - activeCount} archivados
-              </p>
-            </div>
-            <label className="flex cursor-pointer select-none items-center gap-2 text-[11px] text-slate-300">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
-              />
-              Archivados
-            </label>
           </div>
-          <div className="relative mt-3">
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar proyecto…"
-              className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] py-2 pl-9 pr-3 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+              className="w-56 rounded-xl border border-slate-700/80 bg-[#070B12] py-2 pl-9 pr-3 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
             />
           </div>
+          <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
+            />
+            Mostrar archivados
+          </label>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-4 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Crear proyecto
+          </button>
         </div>
-        <div className="flex-1 space-y-2 overflow-y-auto p-3">
-          {listed.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <FolderKanban className="mx-auto h-8 w-8 text-slate-700" />
-              <p className="mt-3 text-xs text-slate-500">
-                {projects.length === 0
-                  ? 'Aún no hay proyectos. Crea el primero con el formulario.'
-                  : 'Ningún proyecto coincide.'}
-              </p>
-            </div>
-          ) : (
-            listed.map((p) => {
-              const active = p.id === selectedId;
-              const archived = p.status === 'ARCHIVED';
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => select(p)}
-                  className={`group relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all ${
-                    active
-                      ? 'border-cyan-500/60 bg-cyan-500/10 shadow-md shadow-cyan-950/30'
-                      : 'border-slate-800 bg-[#0D1525] hover:border-slate-600 hover:bg-[#101A2E]'
-                  } ${archived ? 'opacity-60' : ''}`}
-                >
-                  {active && <span className="absolute inset-y-0 left-0 w-1 bg-cyan-400" />}
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-slate-950 ${avatarOf(p.id)}`}
-                    >
-                      {initials(p.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-semibold text-slate-100">{p.name}</span>
-                        <span
-                          className={`h-2 w-2 shrink-0 rounded-full ${
-                            archived ? 'bg-amber-400' : 'bg-emerald-400'
-                          }`}
-                          title={archived ? 'Archivado' : 'Activo'}
-                        />
-                      </div>
-                      <div className="font-mono text-[10px] text-cyan-400">{p.id}</div>
-                    </div>
+      </div>
+
+      {/* ───────── Rejilla de proyectos ───────── */}
+      {listed.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-800 px-6 py-16 text-center">
+          <FolderKanban className="mx-auto h-10 w-10 text-slate-700" />
+          <p className="mt-3 text-sm text-slate-400">
+            {projects.length === 0 ? 'Aún no tienes proyectos.' : 'Ningún proyecto coincide.'}
+          </p>
+          {projects.length === 0 && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Crear el primer proyecto
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {listed.map((p) => {
+            const archived = p.status === 'ARCHIVED';
+            const spaces = wsOf(p.id);
+            return (
+              <article
+                key={p.id}
+                className={`flex flex-col rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5 transition-colors hover:border-slate-600 ${
+                  archived ? 'opacity-70' : ''
+                }`}
+              >
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-base font-bold text-slate-950 shadow-md ${avatarOf(p.id)}`}
+                  >
+                    {initials(p.name)}
                   </div>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-                    <span className="rounded-md bg-slate-800/70 px-1.5 py-0.5 text-slate-300">
-                      {wsOf(p.id).length} espacios
-                    </span>
-                    <span className="rounded-md bg-slate-800/70 px-1.5 py-0.5 text-slate-300">
-                      {p.goals.length} objetivos
-                    </span>
-                    {p.stack.slice(0, 2).map((t) => (
-                      <span key={t} className="rounded-md bg-cyan-500/10 px-1.5 py-0.5 text-cyan-300">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="truncate text-sm font-semibold text-slate-50">{p.name}</h3>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          archived
+                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                            : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                        }`}
+                      >
+                        {archived ? 'Archivado' : 'Activo'}
+                      </span>
+                    </div>
+                    <div className="font-mono text-[11px] text-cyan-400">{p.id}</div>
+                  </div>
+                </div>
+
+                <p className="mt-3 line-clamp-2 min-h-[2.5rem] text-xs leading-relaxed text-slate-400">
+                  {p.description || 'Sin descripción.'}
+                </p>
+
+                {p.stack.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {p.stack.slice(0, 4).map((t) => (
+                      <span
+                        key={t}
+                        className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-300"
+                      >
                         {t}
                       </span>
                     ))}
-                    {p.stack.length > 2 && (
-                      <span className="text-slate-500">+{p.stack.length - 2}</span>
+                    {p.stack.length > 4 && (
+                      <span className="px-1 text-[10px] text-slate-500">+{p.stack.length - 4}</span>
                     )}
                   </div>
-                </button>
-              );
-            })
-          )}
+                )}
+
+                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-800/70 pt-3 text-center">
+                  <div>
+                    <div className="font-mono text-sm font-semibold text-slate-100">{spaces.length}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Espacios</div>
+                  </div>
+                  <div>
+                    <div className="font-mono text-sm font-semibold text-slate-100">{p.goals.length}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Objetivos</div>
+                  </div>
+                  <div>
+                    <div className="font-mono text-sm font-semibold text-slate-100">{p.stack.length}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Tecnologías</div>
+                  </div>
+                </div>
+
+                {spaces.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {spaces.map((w) => {
+                      const kind = w.kind ?? 'other';
+                      return (
+                        <span
+                          key={w.id}
+                          title={w.path}
+                          className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] ${KIND_STYLE[kind]}`}
+                        >
+                          {w.id}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-auto flex items-center justify-end gap-2 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionError(null);
+                      setConfirm(p);
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] ${
+                      archived
+                        ? 'border-emerald-700/80 bg-emerald-950/20 text-emerald-300 hover:bg-emerald-900/40'
+                        : 'border-amber-900/60 bg-amber-950/20 text-amber-300 hover:bg-amber-900/40'
+                    }`}
+                  >
+                    {archived ? <RotateCcw className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                    {archived ? 'Restaurar' : 'Archivar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(p)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-medium text-cyan-200 hover:bg-cyan-500/20"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Editar
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
-      </aside>
+      )}
+
+      {/* ───────── Modal crear / editar ───────── */}
+      {modalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="project-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
+        >
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-700/80 bg-[#0A101C] shadow-2xl shadow-cyan-950/40">
+            {/* Cabecera */}
+            <div className="flex items-center justify-between gap-4 border-b border-slate-800/80 bg-gradient-to-br from-cyan-500/[0.07] via-transparent to-transparent px-6 py-4">
+              <div className="flex min-w-0 items-center gap-3.5">
+                <div
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-base font-bold text-slate-950 ${
+                    selected ? avatarOf(selected.id) : 'from-slate-600 to-slate-700'
+                  }`}
+                >
+                  {selected ? (
+                    initials(selected.name)
+                  ) : (
+                    <FolderKanban className="h-5 w-5 text-slate-300" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h2
+                    id="project-modal-title"
+                    className="truncate text-base font-semibold text-slate-50"
+                  >
+                    {selected ? `Editar: ${selected.name}` : 'Crear proyecto'}
+                  </h2>
+                  <p className="font-mono text-[11px] text-cyan-400">
+                    {selected ? selected.id : 'Define el nombre y el identificador'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={closeModal}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => void save(e)} className="flex min-h-0 flex-1 flex-col text-xs">
+              <div className="flex-1 space-y-4 overflow-y-auto p-6">
+                {error && (
+                  <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-rose-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {error}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
+                  <SectionTitle
+                    icon={<FolderKanban className="h-3.5 w-3.5" />}
+                    title="Información general"
+                    hint="Nombre, identificador y descripción del proyecto."
+                  />
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="block font-medium text-slate-300">
+                      Nombre del proyecto
+                      <input
+                        type="text"
+                        autoFocus
+                        maxLength={120}
+                        value={draft.name}
+                        onChange={(e) => onNameChange(e.target.value)}
+                        placeholder="ej. Página de la abogada"
+                        className={inputCls}
+                      />
+                    </label>
+                    <label className="block font-medium text-slate-300">
+                      Identificador (ID)
+                      <input
+                        type="text"
+                        disabled={!!selected}
+                        value={draft.id}
+                        onChange={(e) => onIdChange(e.target.value)}
+                        placeholder="ej. pagina-abogada"
+                        className={`${inputCls} font-mono disabled:opacity-60 ${
+                          idError ? '!border-rose-500/80' : ''
+                        }`}
+                      />
+                      <span
+                        className={`mt-1 block text-[11px] ${idError ? 'text-rose-400' : 'text-slate-500'}`}
+                      >
+                        {idError ?? (selected ? 'El ID no se puede cambiar.' : ID_HINT)}
+                      </span>
+                    </label>
+                  </div>
+                  <label className="mt-4 block font-medium text-slate-300">
+                    Descripción
+                    <textarea
+                      rows={3}
+                      maxLength={2000}
+                      value={draft.description}
+                      onChange={(e) => {
+                        setSaved(false);
+                        setDraft((d) => ({ ...d, description: e.target.value }));
+                      }}
+                      placeholder="Describe el propósito general y el alcance del proyecto…"
+                      className={`${inputCls} resize-y`}
+                    />
+                    <span className="mt-1 block text-right font-mono text-[10px] text-slate-500">
+                      {draft.description.length}/2000
+                    </span>
+                  </label>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
+                    <SectionTitle
+                      icon={<Target className="h-3.5 w-3.5" />}
+                      title="Objetivos"
+                      hint="Qué debe lograr el proyecto."
+                    />
+                    <div className="mt-4">
+                      <ChipList
+                        items={draft.goals}
+                        onChange={(goals) => {
+                          setSaved(false);
+                          setDraft((d) => ({ ...d, goals }));
+                        }}
+                        placeholder="Nuevo objetivo (Enter)…"
+                        max={20}
+                        maxLen={200}
+                        numbered
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
+                    <SectionTitle
+                      icon={<Layers className="h-3.5 w-3.5" />}
+                      title="Stack tecnológico"
+                      hint="Lenguajes, frameworks y servicios."
+                    />
+                    <div className="mt-4">
+                      <ChipList
+                        items={draft.stack}
+                        onChange={(stack) => {
+                          setSaved(false);
+                          setDraft((d) => ({ ...d, stack }));
+                        }}
+                        placeholder="ej. Python, FastAPI, React…"
+                        max={30}
+                        maxLen={60}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Espacios de trabajo */}
+                <div className="rounded-2xl border border-slate-800/80 bg-[#0B1322]/70 p-5">
+                  <SectionTitle
+                    icon={<Folder className="h-3.5 w-3.5" />}
+                    title="Espacios de trabajo"
+                    hint="Carpetas del servidor que pertenecen a este proyecto."
+                    right={
+                      selected && (
+                        <span className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-0.5 font-mono text-[11px] text-slate-300">
+                          {wsOf(selected.id).length}
+                        </span>
+                      )
+                    }
+                  />
+
+                  {!selected ? (
+                    <p className="mt-4 rounded-xl border border-dashed border-slate-800 px-4 py-5 text-center text-slate-500">
+                      Crea el proyecto y aquí mismo podrás añadirle espacios de trabajo.
+                    </p>
+                  ) : (
+                    <>
+                      {wsError && (
+                        <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-rose-300">
+                          {wsError}
+                        </div>
+                      )}
+                      {wsOf(selected.id).length === 0 ? (
+                        <p className="mt-4 rounded-xl border border-dashed border-slate-800 px-4 py-5 text-center text-slate-500">
+                          Aún sin espacios. Asigna uno existente o crea uno nuevo.
+                        </p>
+                      ) : (
+                        <ul className="mt-4 grid gap-2.5 sm:grid-cols-2">
+                          {wsOf(selected.id).map((w) => {
+                            const kind = w.kind ?? 'other';
+                            return (
+                              <li
+                                key={w.id}
+                                className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-[#070B14] p-3.5"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="truncate font-mono font-medium text-cyan-300">
+                                      {w.id}
+                                    </span>
+                                    <span
+                                      className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${KIND_STYLE[kind]}`}
+                                    >
+                                      {WORKSPACE_KINDS.find((k) => k.id === kind)?.label ?? 'Otro'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-0.5 text-slate-300">{w.name}</div>
+                                  <div
+                                    className="mt-1.5 truncate rounded-md bg-slate-950/70 px-2 py-1 font-mono text-[10px] text-slate-500"
+                                    title={w.path}
+                                  >
+                                    {w.path}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={wsBusy}
+                                  onClick={() => void putWorkspace(w, null)}
+                                  className="self-end rounded-lg border border-slate-700/80 px-2.5 py-1 text-[11px] text-slate-400 hover:border-rose-500/60 hover:text-rose-300 disabled:opacity-50"
+                                >
+                                  Quitar del proyecto
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+
+                      <div className="mt-4 flex flex-wrap items-end gap-2">
+                        <label className="block min-w-[220px] flex-1 font-medium text-slate-300">
+                          Asignar un espacio existente
+                          <select
+                            value={assignId}
+                            onChange={(e) => setAssignId(e.target.value)}
+                            className={inputCls}
+                          >
+                            <option value="">Selecciona un espacio…</option>
+                            {unassigned.length > 0 && (
+                              <optgroup label="Sin proyecto">
+                                {unassigned.map((w) => (
+                                  <option key={w.id} value={w.id}>
+                                    {w.id} — {w.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {otherProject.length > 0 && (
+                              <optgroup label="De otro proyecto (se mueve)">
+                                {otherProject.map((w) => (
+                                  <option key={w.id} value={w.id}>
+                                    {w.id} — {projectNameById.get(w.projectId ?? '') ?? w.projectId}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          disabled={!assignId || wsBusy}
+                          onClick={() => void assign()}
+                          className="rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-4 py-2.5 text-xs font-medium text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40"
+                        >
+                          Asignar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewWs((w) => ({ ...w, open: !w.open }))}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-4 py-2.5 text-xs text-slate-300 hover:border-cyan-500/60 hover:text-cyan-200"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Crear espacio nuevo
+                        </button>
+                      </div>
+
+                      {newWs.open && (
+                        <div className="mt-4 grid gap-3 border-t border-slate-800 pt-4 sm:grid-cols-2">
+                          <label className="block font-medium text-slate-300">
+                            Nombre
+                            <input
+                              type="text"
+                              value={newWs.name}
+                              onChange={(e) =>
+                                setNewWs((w) => ({
+                                  ...w,
+                                  name: e.target.value,
+                                  id: w.idTouched ? w.id : slugify(e.target.value),
+                                }))
+                              }
+                              placeholder="ej. Repositorio Front"
+                              className={inputCls}
+                            />
+                          </label>
+                          <label className="block font-medium text-slate-300">
+                            ID
+                            <input
+                              type="text"
+                              value={newWs.id}
+                              onChange={(e) =>
+                                setNewWs((w) => ({
+                                  ...w,
+                                  id: e.target.value,
+                                  idTouched: e.target.value.trim() !== '',
+                                }))
+                              }
+                              className={`${inputCls} font-mono`}
+                            />
+                          </label>
+                          <label className="block font-medium text-slate-300">
+                            Tipo de carpeta
+                            <select
+                              value={newWs.kind}
+                              onChange={(e) =>
+                                setNewWs((w) => ({ ...w, kind: e.target.value as ApiWorkspaceKind }))
+                              }
+                              className={inputCls}
+                            >
+                              {WORKSPACE_KINDS.map((k) => (
+                                <option key={k.id} value={k.id}>
+                                  {k.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block font-medium text-slate-300">
+                            Ruta local en el servidor
+                            <input
+                              type="text"
+                              value={newWs.path}
+                              onChange={(e) => setNewWs((w) => ({ ...w, path: e.target.value }))}
+                              placeholder="ej. D:\proyectos\mi-proyecto"
+                              className={`${inputCls} font-mono`}
+                            />
+                          </label>
+                          <div className="flex justify-end sm:col-span-2">
+                            <button
+                              type="button"
+                              disabled={wsBusy}
+                              onClick={() => void createWs()}
+                              className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
+                            >
+                              {wsBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                              Crear y asignar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Pie del modal */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 px-6 py-3.5">
+                <div className="text-[11px]">
+                  {saving ? (
+                    <span className="text-slate-400">Guardando…</span>
+                  ) : saved && !dirty ? (
+                    <span className="inline-flex items-center gap-1.5 text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Cambios guardados
+                    </span>
+                  ) : dirty ? (
+                    <span className="inline-flex items-center gap-1.5 text-amber-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                      Cambios sin guardar
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">Sin cambios</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={discard}
+                    disabled={!dirty || saving}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-3.5 py-2 text-slate-300 hover:text-white disabled:opacity-40"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    Descartar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-xl border border-slate-700/80 px-3.5 py-2 text-slate-300 hover:text-white"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || !dirty}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-6 py-2 font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 disabled:opacity-40 disabled:hover:translate-y-0"
+                  >
+                    {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {selected ? 'Guardar cambios' : 'Crear proyecto'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Confirmar archivar / restaurar (sin window.confirm) */}
       {confirm && (
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
         >
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-[#0B132B] p-6 shadow-2xl">
             <h3 className="text-sm font-semibold text-slate-100">
