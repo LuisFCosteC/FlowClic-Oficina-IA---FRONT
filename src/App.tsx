@@ -7,7 +7,7 @@ import {
   AgentStatus,
   ModelHealthStatus,
   ModelNode,
-  NewTaskInput,
+  EditTaskInput, NewTaskInput,
   ProjectMilestone,
   ProjectRoadmap,
   RoutingPolicy,
@@ -289,6 +289,29 @@ export default function App() {
         projectId: input.projectId,
       });
       dispatch({ type: 'ticket.upsert', ticket: created });
+      return null;
+    } catch (err) {
+      return apiMessage(err);
+    }
+  };
+
+  /** El CEO edita un ticket. Devuelve el mensaje de error o null. */
+  const handleEditTask = async (taskId: string, input: EditTaskInput): Promise<string | null> => {
+    try {
+      const updated = await api.editTicket(taskId, {
+        title: input.title,
+        requirement: input.requirement,
+        priority:
+          input.priority === 'alta'
+            ? 'HIGH'
+            : input.priority === 'media'
+              ? 'MEDIUM'
+              : input.priority === 'baja'
+                ? 'LOW'
+                : null,
+        projectId: input.projectId,
+      });
+      dispatch({ type: 'ticket.upsert', ticket: updated });
       return null;
     } catch (err) {
       return apiMessage(err);
@@ -594,6 +617,7 @@ export default function App() {
                       projects={activeProjects}
                       onMoveTaskStage={handleMoveTaskStage}
                       onCreateTask={handleCreateTask}
+                      onEditTask={handleEditTask}
                     />
                   )}
                 </motion.div>

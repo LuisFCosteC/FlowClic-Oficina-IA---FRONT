@@ -190,6 +190,16 @@ export const api = {
   createBackup: () => request<ApiDbBackupResult>('POST', '/api/admin/backup'),
 
   createTicket: (body: ApiRequestCreate) => request<ApiTicket>('POST', '/api/tickets', body),
+  editTicket: (
+    id: string,
+    body: {
+      title?: string;
+      requirement?: string;
+      priority?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+      model?: string | null;
+      projectId?: string;
+    }
+  ) => request<ApiTicket>('PATCH', `/api/tickets/${encodeURIComponent(id)}`, body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>
     request<ApiTicket>('POST', `/api/tickets/${encodeURIComponent(id)}/transition`, { to }),
 

@@ -122,7 +122,7 @@ const TicketEventRow: React.FC<{ entry: ThreadEntryDto }> = ({ entry }) => {
       <div className="min-w-0 flex-1 pb-1">
         <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
           <span className="font-medium uppercase tracking-wide">
-            {entry.kind === 'CREATED' ? 'Ticket creado' : entry.kind === 'STATUS_CHANGED' ? 'Cambio de estado' : entry.kind}
+            {entry.kind === 'CREATED' ? 'Ticket creado' : entry.kind === 'STATUS_CHANGED' ? 'Cambio de estado' : entry.kind === 'UPDATED' ? 'Ticket editado' : entry.kind}
           </span>
           <span className="font-mono">{clock(entry.createdAt)}</span>
         </div>
@@ -332,12 +332,12 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
             conversationMode === 'GLOBAL' &&
             (created.scope === 'GLOBAL' || created.entryType === 'TICKET_EVENT')
           ) {
-            setMessages((prev) => [...prev, created]);
+            setMessages((prev) => (prev.some((m) => m.id === created.id) ? prev : [...prev, created]));
           } else if (
             conversationMode === 'AGENT' &&
             (created.agentId === selectedAgent?.id || created.scope === 'GLOBAL')
           ) {
-            setMessages((prev) => [...prev, created]);
+            setMessages((prev) => (prev.some((m) => m.id === created.id) ? prev : [...prev, created]));
           }
         } catch {
           void fetchThread();
@@ -387,7 +387,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
 
         if (res.ok) {
           const created: ThreadEntryDto = await res.json();
-          setMessages((prev) => [...prev, created]);
+          setMessages((prev) => (prev.some((m) => m.id === created.id) ? prev : [...prev, created]));
           setOrderText('');
           setOrderFeedback('Orden registrada · Pendiente de Fase 2');
           setTimeout(() => setOrderFeedback(null), 3500);

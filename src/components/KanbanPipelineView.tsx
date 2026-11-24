@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { CornerDownRight, KanbanSquare, List, Loader2, Plus, Search, Undo2, X } from 'lucide-react';
-import { Agent, KanbanTask, NewTaskInput, TaskPriority, TaskStage } from '../types/orbis';
+import { CornerDownRight, KanbanSquare, List, Loader2, Pencil, Plus, Search, Undo2, X } from 'lucide-react';
+import { Agent, EditTaskInput, KanbanTask, NewTaskInput, TaskPriority, TaskStage } from '../types/orbis';
 import type { ApiProject } from '../api/types';
 import { TASK_STAGE_META } from '../data/initialData';
 import { KANBAN_STAGES, canMoveTo, validTargetStages } from '../api/mappers';
@@ -15,6 +15,8 @@ interface KanbanPipelineViewProps {
   onMoveTaskStage: (taskId: string, newStage: TaskStage) => void;
   /** Crea un pedido del CEO. Devuelve el mensaje de error de la API o null si salió bien. */
   onCreateTask: (input: NewTaskInput) => Promise<string | null>;
+  /** El CEO edita un ticket. Devuelve el mensaje de error o null. */
+  onEditTask: (taskId: string, input: EditTaskInput) => Promise<string | null>;
 }
 
 const UNDEFINED_TEXT = 'Por definir';
@@ -40,6 +42,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
   projects,
   onMoveTaskStage,
   onCreateTask,
+  onEditTask,
 }) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [search, setSearch] = useState('');
@@ -51,6 +54,8 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
   const [title, setTitle] = useState('');
   const [requirement, setRequirement] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [priorityEdit, setPriorityEdit] = useState<TaskPriority | ''>('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -105,6 +110,18 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
     setTitle('');
     setRequirement('');
     setFormError('');
+    setEditingId(null);
+    setPriorityEdit('');
+  };
+
+  const openEdit = (task: KanbanTask) => {
+    setTitle(task.title);
+    setRequirement(task.requirement || task.description);
+    setProjectId(task.projectId ?? '');
+    setPriorityEdit(task.priority ?? '');
+    setFormError('');
+    setEditingId(task.id);
+    setCreateOpen(true);
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -113,11 +130,18 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
     if (!requirement.trim()) return setFormError('Describe la especificación o el requerimiento.');
     if (!projectId) return setFormError('Elige el proyecto de la tarea.');
     setSubmitting(true);
-    const err = await onCreateTask({
-      title: title.trim(),
-      requirement: requirement.trim(),
-      projectId,
-    });
+    const err = editingId
+      ? await onEditTask(editingId, {
+          title: title.trim(),
+          requirement: requirement.trim(),
+          priority: priorityEdit === '' ? null : priorityEdit,
+          projectId,
+        })
+      : await onCreateTask({
+          title: title.trim(),
+          requirement: requirement.trim(),
+          projectId,
+        });
     setSubmitting(false);
     if (err) {
       setFormError(err); // p. ej. "Crea primero un agente con rol CTO"
@@ -249,6 +273,17 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
               ${task.estimatedCostUsd.toFixed(2)} · {task.updatedAt}
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
+              {task.apiStatus !== 'DONE' && (
+                <button
+                  type="button"
+                  onClick={() => openEdit(task)}
+                  title="Editar tarea"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700/80 bg-[#0A101C] px-2 py-1 text-[11px] text-slate-300 transition-all hover:border-cyan-500/60 hover:text-cyan-300 active:scale-95"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Editar
+                </button>
+              )}
               {targets.map((target) => (
                 <button
                   key={target}
@@ -525,12 +560,15 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
           >
             <div className="flex items-center justify-between border-b border-slate-800/80 px-5 py-4">
               <h2 id="create-task-title" className="text-sm font-semibold text-slate-100">
-                Nueva tarea
+                {editingId ? 'Editar tarea' : 'Nueva tarea'}
               </h2>
               <button
                 type="button"
                 aria-label="Cerrar"
-                onClick={() => setCreateOpen(false)}
+                onClick={() => {
+                    setCreateOpen(false);
+                    resetForm();
+                  }}
                 className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -607,15 +645,37 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-800 bg-[#070B12] px-3.5 py-2.5 text-[11px] text-slate-400">
-                Se asigna sola al <span className="text-slate-200">CTO</span>. Prioridad y modelo:{' '}
-                <span className="italic text-slate-300">{UNDEFINED_TEXT}</span> (los decide el CTO).
-              </div>
+              {editingId ? (
+                <div>
+                  <label htmlFor="task-priority" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    Prioridad
+                  </label>
+                  <select
+                    id="task-priority"
+                    value={priorityEdit}
+                    onChange={(e) => setPriorityEdit(e.target.value as TaskPriority | '')}
+                    className="w-full rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2.5 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
+                  >
+                    <option value="">{UNDEFINED_TEXT}</option>
+                    <option value="alta">Alta</option>
+                    <option value="media">Media</option>
+                    <option value="baja">Baja</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-800 bg-[#070B12] px-3.5 py-2.5 text-[11px] text-slate-400">
+                  Se asigna sola al <span className="text-slate-200">CTO</span>. Prioridad y modelo:{' '}
+                  <span className="italic text-slate-300">{UNDEFINED_TEXT}</span> (los decide el CTO).
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2.5 border-t border-slate-800/80 pt-4">
                 <button
                   type="button"
-                  onClick={() => setCreateOpen(false)}
+                  onClick={() => {
+                    setCreateOpen(false);
+                    resetForm();
+                  }}
                   className="rounded-xl border border-slate-700/80 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800"
                 >
                   Cancelar
@@ -626,7 +686,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-4 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 disabled:opacity-60"
                 >
                   {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Crear tarea
+                  {editingId ? 'Guardar cambios' : 'Crear tarea'}
                 </button>
               </div>
             </form>

@@ -126,6 +126,14 @@ export interface NewTaskInput {
   projectId: string;
 }
 
+/** Edición de un ticket por el CEO. `priority` null = "Por definir". */
+export interface EditTaskInput {
+  title: string;
+  requirement: string;
+  priority: TaskPriority | null;
+  projectId: string;
+}
+
 /** Datos del modal "Crear agente". */
 export interface NewAgentInput {
   name: string;
