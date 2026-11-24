@@ -180,7 +180,11 @@ const ChatBubble: React.FC<{
       </div>
       {isHuman && (
         <div className="mt-0.5 text-[9px] italic text-slate-500">
-          Pendiente · se ejecutará cuando se conecte el orquestador (Fase 2)
+          {entry.status === 'DONE'
+            ? 'Atendida'
+            : entry.status === 'REJECTED'
+              ? 'No se pudo atender (revisa las claves y los agentes)'
+              : 'En cola · el agente la atenderá en unos segundos'}
         </div>
       )}
     </div>
@@ -389,7 +393,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
           const created: ThreadEntryDto = await res.json();
           setMessages((prev) => (prev.some((m) => m.id === created.id) ? prev : [...prev, created]));
           setOrderText('');
-          setOrderFeedback('Orden registrada · Pendiente de Fase 2');
+          setOrderFeedback('Orden enviada · el agente responderá en unos segundos');
           setTimeout(() => setOrderFeedback(null), 3500);
           setSendingOrder(false);
           return;
