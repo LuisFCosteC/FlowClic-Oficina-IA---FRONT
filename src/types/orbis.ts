@@ -38,7 +38,8 @@ export interface Agent {
   name: string;
   title: string;
   systemPrompt: string;
-  modelTier: ModelTier;
+  model?: string;
+  modelTier?: ModelTier;
   color: string;
   status: AgentStatus;
   ramKb: number;
@@ -82,7 +83,8 @@ export interface SheldonProposal {
   project: string;
   agentId: string;
   agentName: string;
-  modelTier: ModelTier;
+  model?: string;
+  modelTier?: ModelTier;
   category: 'Arquitectura' | 'Despliegue' | 'Seguridad' | 'Datos';
   summary: string;
   sheldonNote: string;
@@ -98,7 +100,8 @@ export interface KanbanTask {
   description: string;
   project: string;
   assigneeId: string;
-  modelTier: ModelTier;
+  model?: string;
+  modelTier?: ModelTier;
   stage: TaskStage;
   priority: TaskPriority;
   estimatedCostUsd: number;

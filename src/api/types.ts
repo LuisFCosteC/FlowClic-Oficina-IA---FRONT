@@ -207,6 +207,7 @@ export interface ApiTicket {
   assignedAgentId: string | null;
   project: string | null;
   modelTier: ApiModelTier;
+  model?: string | null;
   estimatedCostUsd: number;
   position: number;
   createdAt: string;

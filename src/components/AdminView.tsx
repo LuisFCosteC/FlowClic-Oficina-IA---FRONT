@@ -16,7 +16,8 @@ import {
 import { api, ApiError, getApiErrorMessage } from '../api/client';
 import { agentFromApi, formatDate } from '../api/mappers';
 import { Agent } from '../types/orbis';
-import { MODEL_TIER_META, STATUS_META } from '../data/initialData';
+import { STATUS_META } from '../data/initialData';
+import { getModelDisplayName } from '../utils/models';
 import { AgentCredentialsPanel } from './AgentCredentialsPanel';
 import { AuditPanel } from './AuditPanel';
 import { ConnectionsPanel } from './ConnectionsPanel';
@@ -310,7 +311,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                               )}
                             </td>
                             <td className="px-3 py-3 font-mono text-cyan-400">
-                              {MODEL_TIER_META[a.modelTier].shortLabel}
+                              {getModelDisplayName(a.model ?? a.modelConfig?.primary ?? a.modelTier)}
                             </td>
                             <td className="px-3 py-3 text-slate-400">{a.project || '—'}</td>
                             <td className="px-5 py-3 text-right">

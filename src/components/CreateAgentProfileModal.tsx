@@ -36,6 +36,7 @@ import { AvatarEditor } from './AvatarEditor';
 import type { AvatarLook } from '../types/agentProfile';
 import { api } from '../api/client';
 import type { ApiModelInfo, ApiWorkspace } from '../api/types';
+import { setModelCatalog } from '../utils/models';
 import { agentFromApi } from '../api/mappers';
 
 interface CreateAgentProfileModalProps {
@@ -116,7 +117,10 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
     let cancelled = false;
     void api.listModels().then(
       (res) => {
-        if (!cancelled && Array.isArray(res)) setModelsList(res);
+        if (!cancelled && Array.isArray(res)) {
+          setModelsList(res);
+          setModelCatalog(res);
+        }
       },
       () => {}
     );

@@ -15,6 +15,7 @@ import {
 } from './types/orbis';
 import type { AgentCreatePayload } from './types/agentProfile';
 import { INITIAL_MODELS, isResting } from './data/initialData';
+import { initModelCatalog } from './utils/models';
 import { api, ApiError } from './api/client';
 import type { ApiAgentCreate, ApiAgentUpdate } from './api/types';
 import { CONFIG_ERROR } from './api/config';
@@ -137,6 +138,7 @@ export default function App() {
   }, [dispatch]);
 
   useEffect(() => {
+    void initModelCatalog();
     void loadSnapshot();
     return connectRealtime({
       onEvent: (ev) => {

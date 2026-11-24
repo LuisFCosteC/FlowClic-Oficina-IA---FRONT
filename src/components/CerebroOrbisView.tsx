@@ -19,7 +19,8 @@ import {
   RoutingPolicy,
   SheldonProposal,
 } from '../types/orbis';
-import { MODEL_TIER_META, STATUS_META, isResting } from '../data/initialData';
+import { STATUS_META, isResting } from '../data/initialData';
+import { getModelDisplayName } from '../utils/models';
 
 interface CerebroOrbisViewProps {
   agents: Agent[];
@@ -353,7 +354,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                         </h3>
                       </div>
                       <span className="shrink-0 font-mono text-[11px] text-cyan-400">
-                        {MODEL_TIER_META[prop.modelTier].shortLabel}
+                        {getModelDisplayName(prop.model ?? prop.modelTier)}
                       </span>
                     </div>
 
@@ -521,7 +522,7 @@ export const CerebroOrbisView: React.FC<CerebroOrbisViewProps> = ({
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5 font-mono text-slate-200">
                           <Cpu className="h-3.5 w-3.5 text-slate-500" />
-                          <span>{MODEL_TIER_META[agent.modelTier].shortLabel}</span>
+                          <span>{getModelDisplayName(agent.model ?? agent.modelConfig?.primary ?? agent.modelTier)}</span>
                         </div>
                       </td>
                       <td className="max-w-xs px-4 py-3 text-slate-300">

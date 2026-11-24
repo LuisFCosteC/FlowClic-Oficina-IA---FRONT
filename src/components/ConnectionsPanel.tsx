@@ -18,6 +18,7 @@ import type { ApiCredential, ApiModelInfo, CredentialProvider } from '../api/typ
 import type { Agent } from '../types/orbis';
 import { AdminErrorCard } from './AdminErrorCard';
 import { DbConnectionPanel } from './DbConnectionPanel';
+import { setModelCatalog } from '../utils/models';
 
 const PROVIDER_OPTIONS: Array<{ id: CredentialProvider; label: string }> = [
   { id: 'google', label: 'Google / Gemini' },
@@ -95,6 +96,7 @@ export const ConnectionsPanel: React.FC<ConnectionsPanelProps> = ({ agents }) =>
       if (!mounted.current) return;
       setCredentials(creds);
       setModels(mods);
+      setModelCatalog(mods);
     } catch (err) {
       if (mounted.current) {
         setError(getApiErrorMessage(err, 'Error al cargar las conexiones y modelos.'));

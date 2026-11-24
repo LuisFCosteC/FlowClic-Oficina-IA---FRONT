@@ -17,7 +17,8 @@ import {
   TaskPriority,
   TaskStage,
 } from '../types/orbis';
-import { MODEL_TIER_META, TASK_STAGE_META } from '../data/initialData';
+import { TASK_STAGE_META } from '../data/initialData';
+import { getModelDisplayName } from '../utils/models';
 
 interface KanbanPipelineViewProps {
   tasks: KanbanTask[];
@@ -319,7 +320,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                                 <span>{assignee?.name ?? 'Sin asignar'}</span>
                               </div>
                               <span className="font-mono text-cyan-400">
-                                {MODEL_TIER_META[task.modelTier].shortLabel}
+                                {getModelDisplayName(task.model ?? assignee?.model ?? assignee?.modelConfig?.primary ?? task.modelTier)}
                               </span>
                             </div>
 
@@ -418,7 +419,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
                             </div>
                           </td>
                           <td className="px-4 py-3.5 font-mono text-cyan-400">
-                            {MODEL_TIER_META[task.modelTier].shortLabel}
+                            {getModelDisplayName(task.model ?? assignee?.model ?? assignee?.modelConfig?.primary ?? task.modelTier)}
                           </td>
                           <td className={`px-4 py-3.5 ${prio.className}`}>
                             {prio.label}

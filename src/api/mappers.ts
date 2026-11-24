@@ -38,25 +38,6 @@ export const agentStatusFromApi = (s: ApiAgentStatus): AgentStatus =>
   AGENT_STATUS_FROM_API[s] ?? 'idle';
 export const agentStatusToApi = (s: AgentStatus): ApiAgentStatus => AGENT_STATUS_TO_API[s];
 
-/* ── Modelo ↔ nivel ────────────────────────────────────────────────────────────────────── */
-const TIER_BY_MODEL: Record<string, ModelTier> = {
-  'claude-opus-5-5': 'opus_pro',
-  'gemini-pro': 'opus_pro',
-  'claude-sonnet-5-5': 'sonnet_pro',
-  'claude-haiku-5-5': 'haiku_flash',
-  'gemini-flash': 'haiku_flash',
-};
-
-/** Modelo del catálogo (models_catalog.py) que se registra al elegir un nivel. */
-export const MODEL_ID_BY_TIER: Record<ModelTier, string> = {
-  opus_pro: 'claude-opus-5-5',
-  sonnet_pro: 'claude-sonnet-5-5',
-  haiku_flash: 'claude-haiku-5-5',
-};
-
-export const tierFromModel = (primary: string): ModelTier =>
-  TIER_BY_MODEL[primary] ?? 'sonnet_pro';
-
 /* ── Agente ────────────────────────────────────────────────────────────────────────────── */
 export function agentFromApi(a: ApiAgent): Agent {
   const look: AvatarLook = {};
@@ -71,7 +52,7 @@ export function agentFromApi(a: ApiAgent): Agent {
     name: a.name,
     title: a.role,
     systemPrompt: a.systemPrompt,
-    modelTier: tierFromModel(a.model.primary),
+    model: a.model.primary,
     color: a.avatar.color,
     status: agentStatusFromApi(a.status),
     ramKb: 0, // la API no mide memoria todavía: no se inventa
@@ -149,6 +130,7 @@ export function ticketFromApi(t: ApiTicket): KanbanTask {
     description: t.description,
     project: t.project ?? '',
     assigneeId: t.assignedAgentId ?? '',
+    model: t.model ?? undefined,
     modelTier: t.modelTier,
     stage: stageFromTicket(t.status),
     priority: PRIORITY_FROM_API[t.priority],
@@ -174,7 +156,8 @@ export function proposalFromApproval(
     project: ticket?.project ?? '',
     agentId: a.agentId ?? '',
     agentName: agent?.name ?? 'Sin agente',
-    modelTier: agent?.modelTier ?? ticket?.modelTier ?? 'sonnet_pro',
+    model: agent?.model ?? agent?.modelConfig?.primary ?? ticket?.model,
+    modelTier: ticket?.modelTier,
     category: a.category,
     summary: a.summary,
     sheldonNote: a.reviewerNote,
