@@ -13,7 +13,26 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, ApiError, getApiErrorMessage } from '../api/client';
-import type { ApiWorkspace, ApiWorkspaceCheck } from '../api/types';
+import type {
+  ApiProject,
+  ApiWorkspace,
+  ApiWorkspaceCheck,
+  ApiWorkspaceKind,
+} from '../api/types';
+
+export const WORKSPACE_KINDS: Array<{ id: ApiWorkspaceKind; label: string }> = [
+  { id: 'api', label: 'API' },
+  { id: 'front', label: 'Front' },
+  { id: 'docs', label: 'Docs' },
+  { id: 'mobile', label: 'Móvil' },
+  { id: 'other', label: 'Otro' },
+];
+
+interface WorkspacesPanelProps {
+  projects: ApiProject[];
+  /** Selector global de proyecto en la cabecera ('all' = todos). */
+  projectFilter: string;
+}
 import { AdminErrorCard } from './AdminErrorCard';
 
 interface WorkspaceCheckState {
@@ -28,6 +47,8 @@ interface FormState {
   id: string;
   name: string;
   path: string;
+  projectId: string;
+  kind: ApiWorkspaceKind;
   error?: string;
   idError?: string;
   idManuallyEdited?: boolean;
@@ -48,7 +69,7 @@ const slugifyWorkspaceId = (name: string): string =>
     .slice(0, 32)
     .replace(/[-_]+$/, '');
 
-export const WorkspacesPanel: React.FC = () => {
+export const WorkspacesPanel: React.FC<WorkspacesPanelProps> = ({ projects, projectFilter }) => {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -61,6 +82,8 @@ export const WorkspacesPanel: React.FC = () => {
     id: '',
     name: '',
     path: '',
+    projectId: '',
+    kind: 'other',
     submitting: false,
   });
 
@@ -107,6 +130,10 @@ export const WorkspacesPanel: React.FC = () => {
     }
   };
 
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
+  const shownWorkspaces =
+    projectFilter === 'all' ? workspaces : workspaces.filter((w) => w.projectId === projectFilter);
+
   const openCreateModal = () => {
     setForm({
       isOpen: true,
@@ -114,6 +141,8 @@ export const WorkspacesPanel: React.FC = () => {
       id: '',
       name: '',
       path: '',
+      projectId: projectFilter !== 'all' ? projectFilter : '',
+      kind: 'other',
       submitting: false,
       error: undefined,
       idError: undefined,
@@ -128,6 +157,8 @@ export const WorkspacesPanel: React.FC = () => {
       id: ws.id,
       name: ws.name,
       path: ws.path,
+      projectId: ws.projectId ?? '',
+      kind: ws.kind ?? 'other',
       submitting: false,
       error: undefined,
       idError: undefined,
@@ -191,6 +222,8 @@ export const WorkspacesPanel: React.FC = () => {
       await api.upsertWorkspace(trimmedId, {
         name: trimmedName,
         path: trimmedPath,
+        projectId: form.projectId || null,
+        kind: form.kind,
       });
       setForm({
         isOpen: false,
@@ -198,6 +231,8 @@ export const WorkspacesPanel: React.FC = () => {
         id: '',
         name: '',
         path: '',
+        projectId: '',
+        kind: 'other',
         submitting: false,
         error: undefined,
         idError: undefined,
@@ -319,13 +354,15 @@ export const WorkspacesPanel: React.FC = () => {
                 <tr>
                   <th className="px-5 py-2.5 font-medium">ID</th>
                   <th className="px-3 py-2.5 font-medium">Nombre</th>
+                  <th className="px-3 py-2.5 font-medium">Proyecto</th>
+                  <th className="px-3 py-2.5 font-medium">Tipo</th>
                   <th className="px-3 py-2.5 font-medium">Ruta local</th>
                   <th className="px-3 py-2.5 font-medium">Estado</th>
                   <th className="px-5 py-2.5 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/70">
-                {workspaces.map((ws) => {
+                {shownWorkspaces.map((ws) => {
                   const check = checks[ws.id];
                   return (
                     <tr key={ws.id} className="text-slate-200">
@@ -333,6 +370,16 @@ export const WorkspacesPanel: React.FC = () => {
                         {ws.id}
                       </td>
                       <td className="px-3 py-3 font-medium text-slate-100">{ws.name}</td>
+                      <td className="px-3 py-3 text-slate-300">
+                        {ws.projectId ? (
+                          (projectName.get(ws.projectId) ?? ws.projectId)
+                        ) : (
+                          <span className="italic text-amber-400/90">Sin asignar</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-300">
+                        {WORKSPACE_KINDS.find((k) => k.id === (ws.kind ?? 'other'))?.label ?? 'Otro'}
+                      </td>
                       <td className="px-3 py-3 font-mono text-[11px] text-slate-400">
                         <span className="rounded bg-slate-950/60 px-2 py-1 border border-slate-800/60">
                           {ws.path}
@@ -487,6 +534,42 @@ export const WorkspacesPanel: React.FC = () => {
                     Solo minúsculas, números, - y _ (ej. pagina-abogada)
                   </p>
                 ) : null}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block font-medium text-slate-300">
+                  Proyecto
+                  <select
+                    value={form.projectId}
+                    onChange={(e) => setForm((p) => ({ ...p, projectId: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
+                  >
+                    <option value="">Sin asignar</option>
+                    {projects
+                      .filter((p) => p.status === 'ACTIVE' || p.id === form.projectId)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="block font-medium text-slate-300">
+                  Tipo de carpeta
+                  <select
+                    value={form.kind}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, kind: e.target.value as ApiWorkspaceKind }))
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2 text-xs text-slate-200 focus:border-cyan-500 focus:outline-none"
+                  >
+                    {WORKSPACE_KINDS.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
               <div>

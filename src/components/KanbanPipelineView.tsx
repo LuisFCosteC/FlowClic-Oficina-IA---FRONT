@@ -43,7 +43,6 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [search, setSearch] = useState('');
-  const [projectFilter, setProjectFilter] = useState<string>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -54,11 +53,6 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
   const [projectId, setProjectId] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const projectNames = useMemo(
-    () => Array.from(new Set(tasks.map((t) => t.project).filter((p) => p !== ''))).sort(),
-    [tasks]
-  );
 
   const agentMap = useMemo(() => {
     const map = new Map<string, Agent>();
@@ -71,7 +65,6 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
   const filteredTasks = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tasks.filter((t) => {
-      if (projectFilter !== 'all' && t.project !== projectFilter) return false;
       if (agentFilter !== 'all' && t.assigneeId !== agentFilter) return false;
       if (
         q &&
@@ -83,7 +76,7 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
       }
       return true;
     });
-  }, [tasks, search, projectFilter, agentFilter]);
+  }, [tasks, search, agentFilter]);
 
   /** Subtareas de cada pedido (se ven debajo de su pedido). */
   const subtasksOf = useMemo(() => {
@@ -296,20 +289,6 @@ export const KanbanPipelineView: React.FC<KanbanPipelineViewProps> = ({
               className="w-56 rounded-xl border border-slate-700/80 bg-[#070B12] py-2 pl-9 pr-3 text-xs text-slate-100 placeholder-slate-500 transition-colors focus:border-cyan-400 focus:outline-none"
             />
           </div>
-
-          <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            aria-label="Filtrar por proyecto"
-            className="rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-          >
-            <option value="all">Todos los proyectos</option>
-            {projectNames.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
 
           <select
             value={agentFilter}

@@ -23,11 +23,14 @@ import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { RulesPanel } from './RulesPanel';
 import { UsersPanel } from './UsersPanel';
 import { WorkspacesPanel } from './WorkspacesPanel';
+import { ProjectsPanel } from './ProjectsPanel';
+import type { ApiProject } from '../api/types';
 import { AdminErrorCard } from './AdminErrorCard';
 
 export type AdminTab =
   | 'agents'
   | 'connections'
+  | 'projects'
   | 'workspaces'
   | 'project'
   | 'rules'
@@ -38,6 +41,7 @@ export type AdminTab =
 const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'agents', label: 'Agentes', enabled: true },
   { id: 'connections', label: 'Conexiones', enabled: true },
+  { id: 'projects', label: 'Proyectos', enabled: true },
   { id: 'workspaces', label: 'Espacios de trabajo', enabled: true },
   { id: 'project', label: 'Proyecto', enabled: true },
   { id: 'rules', label: 'Reglas', enabled: true },
@@ -50,6 +54,11 @@ const DISABLED_TEXT = 'Disponible tras el login (S06)';
 
 export interface AdminViewProps {
   agents: Agent[];
+  /** Todos los proyectos (activos y archivados). */
+  projects: ApiProject[];
+  onProjectChange: (project: ApiProject) => void;
+  /** Selector global de proyecto de la cabecera ('all' = todos). */
+  projectFilter: string;
   onOpenCreateAgent: () => void;
   onOpenEditAgent: (agent: Agent) => void;
   initialTab?: AdminTab;
@@ -58,6 +67,9 @@ export interface AdminViewProps {
 
 export const AdminView: React.FC<AdminViewProps> = ({
   agents,
+  projects,
+  onProjectChange,
+  projectFilter,
   onOpenCreateAgent,
   onOpenEditAgent,
   initialTab,
@@ -365,7 +377,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <ConnectionsPanel />
         )}
 
-        {tab === 'workspaces' && <WorkspacesPanel />}
+        {tab === 'projects' && (
+          <ProjectsPanel projects={projects} onProjectChange={onProjectChange} />
+        )}
+
+        {tab === 'workspaces' && (
+          <WorkspacesPanel projects={projects} projectFilter={projectFilter} />
+        )}
 
         {tab === 'project' && <ProjectSettingsPanel />}
 

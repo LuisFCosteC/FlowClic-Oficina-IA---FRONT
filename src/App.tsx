@@ -108,6 +108,8 @@ export default function App() {
   const [createAgentOpen, setCreateAgentOpen] = useState<boolean>(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [adminTab, setAdminTab] = useState<AdminTab>('agents');
+  // Selector global de proyecto (cabecera): filtra Kanban, Cerebro y tablas. 'all' = todos.
+  const [projectFilter, setProjectFilter] = useState<string>('all');
 
   // Datos del servidor (BD): agentes, tickets y aprobaciones.
   const [store, dispatch] = useOfficeStore();
@@ -186,6 +188,16 @@ export default function App() {
     () => store.projects.filter((p) => p.status === 'ACTIVE'),
     [store.projects]
   );
+  // Si el proyecto elegido se archiva o desaparece, se vuelve a "Todos".
+  useEffect(() => {
+    if (projectFilter !== 'all' && !activeProjects.some((p) => p.id === projectFilter)) {
+      setProjectFilter('all');
+    }
+  }, [activeProjects, projectFilter]);
+  const visibleTasks = useMemo(
+    () => (projectFilter === 'all' ? tasks : tasks.filter((t) => t.projectId === projectFilter)),
+    [tasks, projectFilter]
+  );
   const proposals = useMemo(() => {
     const agentsById = new Map(agents.map((a) => [a.id, a]));
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
@@ -193,6 +205,13 @@ export default function App() {
       .map((ap) => proposalFromApproval(ap, agentsById, tasksById))
       .filter((p) => p !== null);
   }, [store.approvals, agents, tasks]);
+  const visibleProposals = useMemo(() => {
+    if (projectFilter === 'all') return proposals;
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    return proposals.filter(
+      (p) => p.linkedTaskId && byId.get(p.linkedTaskId)?.projectId === projectFilter
+    );
+  }, [proposals, tasks, projectFilter]);
 
   // ── Handlers: llaman a la API, sin lógica de negocio local ──
   const handleChangeAgentStatus = async (agentId: string, status: AgentStatus) => {
@@ -432,6 +451,22 @@ export default function App() {
           </div>
 
           <div className="flex shrink-0 items-center gap-5">
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="hidden sm:inline">Proyecto</span>
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                aria-label="Proyecto activo"
+                className="max-w-[180px] rounded-xl border border-slate-700/80 bg-[#070B12] px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
+              >
+                <option value="all">Todos</option>
+                {activeProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="hidden items-center gap-3 text-xs text-slate-400 md:flex">
               <span className="font-mono text-slate-300">
                 {agents.length} agentes
@@ -508,7 +543,7 @@ export default function App() {
                     <CerebroOrbisView
                       agents={agents}
                       models={models}
-                      proposals={proposals}
+                      proposals={visibleProposals}
                       routingPolicy={routingPolicy}
                       onChangeRoutingPolicy={handleChangeRoutingPolicy}
                       onCycleModelStatus={handleCycleModelStatus}
@@ -532,7 +567,7 @@ export default function App() {
                     renderEmpty('kanban')
                   ) : (
                     <KanbanPipelineView
-                      tasks={tasks}
+                      tasks={visibleTasks}
                       agents={agents}
                       projects={activeProjects}
                       onMoveTaskStage={handleMoveTaskStage}
@@ -574,6 +609,9 @@ export default function App() {
                 >
                   <AdminView
                     agents={agents}
+                    projects={store.projects}
+                    onProjectChange={(project) => dispatch({ type: 'project.upsert', project })}
+                    projectFilter={projectFilter}
                     onOpenCreateAgent={openCreateAgent}
                     onOpenEditAgent={openEditAgent}
                     initialTab={adminTab}
