@@ -64,6 +64,7 @@ export function agentFromApi(a: ApiAgent): Agent {
     hairStyle: a.avatar.hairStyle ?? undefined,
     look: Object.keys(look).length ? look : undefined,
     character: a.character,
+    reportsTo: a.reportsTo ?? undefined,
     roleType: a.roleType,
     functions: a.functions,
     rules: a.rules,

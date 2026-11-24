@@ -1,41 +1,38 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
-  Check,
   ChevronDown,
-  Cpu,
-  Eye,
-  FileCode,
-  HardDrive,
-  Info,
-  Layers,
+  ChevronRight,
+  Loader2,
   Lock,
   Pencil,
   Plus,
-  Shield,
   Sparkles,
   Trash2,
-  User,
   X,
 } from 'lucide-react';
 import {
   ACTION_DEFINITIONS,
   AgentCreatePayload,
+  AgentPermissions,
+  EMPTY_FOLDER_ACCESS,
+  FOLDER_KINDS,
+  FolderAccess,
   generateSystemPromptPreview,
   GLOBAL_RESTRICTIONS,
   HairStyle,
+  ProjectScope,
   RoleType,
   TicketStatus,
   TRANSITION_LABELS,
   VALID_TRANSITIONS,
   WORKSPACE_LEVELS,
-  WorkspaceLevel,
 } from '../types/agentProfile';
 import { Agent } from '../types/orbis';
 import { AvatarEditor } from './AvatarEditor';
 import type { AvatarLook } from '../types/agentProfile';
 import { api } from '../api/client';
-import type { ApiModelInfo, ApiWorkspace } from '../api/types';
+import type { ApiModelInfo, ApiProject } from '../api/types';
 import { setModelCatalog } from '../utils/models';
 import { agentFromApi } from '../api/mappers';
 
@@ -53,63 +50,158 @@ interface CreateAgentProfileModalProps {
   onNavigateToWorkspaces?: () => void;
 }
 
-type ModalTab = 'profile' | 'behavior' | 'permissions' | 'model' | 'preview';
+const ROLE_TYPES: Array<{ id: RoleType; label: string }> = [
+  { id: 'CUSTOM', label: 'CUSTOM (Personalizado)' },
+  { id: 'CTO', label: 'CTO (Orquestador principal)' },
+  { id: 'DEV_BACKEND', label: 'DEV_BACKEND (Backend & Core)' },
+  { id: 'DEV_FRONTEND', label: 'DEV_FRONTEND (Frontend & UI)' },
+  { id: 'QA', label: 'QA (Calidad & Seguridad)' },
+];
+
+const LIMIT_DEFAULTS = { maxTokensPerTicket: 150000, maxUsdPerDay: 8, maxRetries: 3 };
+const CEO = 'CEO'; // valor del select: se envía como reportsTo = null
+
+/** Sección plegable con un resumen de sus valores por defecto. */
+const Collapsible: React.FC<{
+  title: string;
+  hint: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}> = ({ title, hint, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="rounded-2xl border border-slate-800/80 bg-[#0B1220]/70">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <span className="flex items-center gap-2 text-xs font-semibold text-slate-100">
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 text-cyan-400" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
+          )}
+          {title}
+        </span>
+        <span className="text-[11px] text-slate-500">{hint}</span>
+      </button>
+      {open && <div className="border-t border-slate-800/70 px-4 py-4">{children}</div>}
+    </section>
+  );
+};
+
+const inputCls =
+  'mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none';
+
+const ListEditor: React.FC<{
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder: string;
+}> = ({ items, onChange, placeholder }) => {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    onChange([...items, v]);
+    setDraft('');
+  };
+  return (
+    <div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          maxLength={500}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder={placeholder}
+          className={`${inputCls} mt-0`}
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-cyan-500/45 bg-cyan-500/12 px-3 text-xs text-cyan-200 hover:bg-cyan-500/20"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Añadir
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="mt-2 text-[11px] text-slate-500">Sin elementos (valor por defecto: vacío).</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {items.map((it, i) => (
+            <li
+              key={`${i}-${it}`}
+              className="flex items-start justify-between gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-200"
+            >
+              <span>{it}</span>
+              <button
+                type="button"
+                aria-label="Quitar"
+                onClick={() => onChange(items.filter((_, j) => j !== i))}
+                className="text-slate-500 hover:text-rose-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const normalizePermissions = (p?: Partial<AgentPermissions>): AgentPermissions => ({
+  folderAccess: { ...EMPTY_FOLDER_ACCESS, ...(p?.folderAccess ?? {}) },
+  projectScope: p?.projectScope ?? 'ALL',
+  actions: p?.actions ?? [],
+  ticketTransitions: p?.ticketTransitions ?? [],
+  onlyAssignedTickets: p?.onlyAssignedTickets ?? true,
+});
 
 export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = ({
   open,
   onClose,
   onSubmit,
-  apiErrors = [],
   agentToEdit = null,
   existingAgents,
-  onNavigateToWorkspaces,
 }) => {
-  const [activeTab, setActiveTab] = useState<ModalTab>('profile');
-
-  // Basic Profile Info
+  // ── Obligatorios ──
   const [name, setName] = useState('');
-  const [character, setCharacter] = useState('');
   const [role, setRole] = useState('');
   const [roleType, setRoleType] = useState<RoleType>('CUSTOM');
-  const [reportsTo, setReportsTo] = useState('');
+  const [primaryModel, setPrimaryModel] = useState('');
+  const [reportsTo, setReportsTo] = useState(''); // '' = sin elegir · 'CEO' · id de agente
+
+  // ── Opcionales (plegables, con valores por defecto) ──
+  const [character, setCharacter] = useState('');
   const [avatarColor, setAvatarColor] = useState('#06B6D4');
   const [hairStyle, setHairStyle] = useState<HairStyle>('short');
   const [glasses, setGlasses] = useState(false);
   const [look, setLook] = useState<AvatarLook>({});
-
-  // Behavior Lists
   const [functions, setFunctions] = useState<string[]>([]);
   const [rules, setRules] = useState<string[]>([]);
   const [restrictions, setRestrictions] = useState<string[]>([]);
-
-  // Inline List Input Temp States
-  const [newFunctionInput, setNewFunctionInput] = useState('');
-  const [newRuleInput, setNewRuleInput] = useState('');
-  const [newRestrictionInput, setNewRestrictionInput] = useState('');
-
-  // Permissions (workspaces start completely empty)
-  const [workspaces, setWorkspaces] = useState<Record<string, WorkspaceLevel>>({});
-  const [actions, setActions] = useState<string[]>([]);
-  const [ticketTransitions, setTicketTransitions] = useState<
-    Array<[TicketStatus, TicketStatus]>
-  >([]);
-  const [onlyAssignedTickets, setOnlyAssignedTickets] = useState(true);
-
-  // Model & Limits
-  const [primaryModel, setPrimaryModel] = useState('');
-  const [fallbackModel, setFallbackModel] = useState<string>('');
+  const [perms, setPerms] = useState<AgentPermissions>(normalizePermissions());
+  const [fallbackModel, setFallbackModel] = useState('');
   const [fallbackCondition, setFallbackCondition] = useState('');
-  const [maxTokensPerTicket, setMaxTokensPerTicket] = useState(150000);
-  const [maxUsdPerDay, setMaxUsdPerDay] = useState(8);
-  const [maxRetries, setMaxRetries] = useState(3);
+  const [maxTokensPerTicket, setMaxTokensPerTicket] = useState(LIMIT_DEFAULTS.maxTokensPerTicket);
+  const [maxUsdPerDay, setMaxUsdPerDay] = useState(LIMIT_DEFAULTS.maxUsdPerDay);
+  const [maxRetries, setMaxRetries] = useState(LIMIT_DEFAULTS.maxRetries);
 
-  // Form State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Dynamic Models, Workspaces and Agents from API
   const [modelsList, setModelsList] = useState<ApiModelInfo[]>([]);
-  const [workspacesList, setWorkspacesList] = useState<ApiWorkspace[]>([]);
+  const [projectsList, setProjectsList] = useState<ApiProject[]>([]);
   const [internalAgents, setInternalAgents] = useState<Agent[]>([]);
 
   useEffect(() => {
@@ -124,9 +216,9 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       },
       () => {}
     );
-    void api.listWorkspaces().then(
+    void api.listProjects().then(
       (res) => {
-        if (!cancelled && Array.isArray(res)) setWorkspacesList(res);
+        if (!cancelled && Array.isArray(res)) setProjectsList(res);
       },
       () => {}
     );
@@ -143,72 +235,41 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
     };
   }, [open, existingAgents]);
 
-  const allAvailableAgents = useMemo(() => {
-    const list = existingAgents || internalAgents;
-    if (agentToEdit) {
-      return list.filter((a) => a.id !== agentToEdit.id);
-    }
-    return list;
+  const otherAgents = useMemo(() => {
+    const list = existingAgents ?? internalAgents;
+    return list.filter((a) => a.id !== agentToEdit?.id && !a.archivedAt);
   }, [existingAgents, internalAgents, agentToEdit]);
-
-  // Map API errors to field paths
-  const fieldErrors = useMemo(() => {
-    const map = new Map<string, string>();
-    apiErrors.forEach((err) => {
-      map.set(err.path, err.message);
-    });
-    return map;
-  }, [apiErrors]);
 
   useEffect(() => {
     if (!open) return;
+    setLocalError(null);
     if (agentToEdit) {
       setName(agentToEdit.name);
-      setCharacter(agentToEdit.character ?? agentToEdit.name);
       setRole(agentToEdit.title);
       setRoleType(agentToEdit.roleType ?? 'CUSTOM');
-      setReportsTo(agentToEdit.reportsTo ?? '');
+      setPrimaryModel(agentToEdit.modelConfig?.primary ?? agentToEdit.model ?? '');
+      setReportsTo(agentToEdit.reportsTo ?? CEO);
+      setCharacter(agentToEdit.character ?? agentToEdit.name);
       setAvatarColor(agentToEdit.color);
       setHairStyle(agentToEdit.hairStyle ?? 'short');
       setGlasses(Boolean(agentToEdit.glasses));
       setLook(agentToEdit.look ?? {});
-
-      setFunctions(agentToEdit.functions ? [...agentToEdit.functions] : []);
-      setRules(agentToEdit.rules ? [...agentToEdit.rules] : []);
-      setRestrictions(agentToEdit.restrictions ? [...agentToEdit.restrictions] : []);
-
-      setWorkspaces(
-        agentToEdit.permissions?.workspaces
-          ? { ...agentToEdit.permissions.workspaces }
-          : {}
-      );
-      setActions(
-        agentToEdit.permissions?.actions
-          ? [...agentToEdit.permissions.actions]
-          : []
-      );
-      setTicketTransitions(
-        agentToEdit.permissions?.ticketTransitions
-          ? [...agentToEdit.permissions.ticketTransitions]
-          : []
-      );
-      setOnlyAssignedTickets(agentToEdit.permissions?.onlyAssignedTickets ?? true);
-
-      setPrimaryModel(agentToEdit.modelConfig?.primary ?? '');
+      setFunctions([...(agentToEdit.functions ?? [])]);
+      setRules([...(agentToEdit.rules ?? [])]);
+      setRestrictions([...(agentToEdit.restrictions ?? [])]);
+      setPerms(normalizePermissions(agentToEdit.permissions));
       setFallbackModel(agentToEdit.modelConfig?.fallback ?? '');
       setFallbackCondition(agentToEdit.modelConfig?.fallbackCondition ?? '');
-
-      setMaxTokensPerTicket(agentToEdit.limits?.maxTokensPerTicket ?? 150000);
-      setMaxUsdPerDay(agentToEdit.limits?.maxUsdPerDay ?? 8);
-      setMaxRetries(agentToEdit.limits?.maxRetries ?? 3);
-      setLocalError(null);
+      setMaxTokensPerTicket(agentToEdit.limits?.maxTokensPerTicket ?? LIMIT_DEFAULTS.maxTokensPerTicket);
+      setMaxUsdPerDay(agentToEdit.limits?.maxUsdPerDay ?? LIMIT_DEFAULTS.maxUsdPerDay);
+      setMaxRetries(agentToEdit.limits?.maxRetries ?? LIMIT_DEFAULTS.maxRetries);
     } else {
-      // Formulario empieza VACÍO
       setName('');
-      setCharacter('');
       setRole('');
       setRoleType('CUSTOM');
+      setPrimaryModel('');
       setReportsTo('');
+      setCharacter('');
       setAvatarColor('#06B6D4');
       setHairStyle('short');
       setGlasses(false);
@@ -216,239 +277,178 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       setFunctions([]);
       setRules([]);
       setRestrictions([]);
-      setWorkspaces({});
-      setActions([]);
-      setTicketTransitions([]);
-      setOnlyAssignedTickets(true);
-      setPrimaryModel('');
+      setPerms(normalizePermissions());
       setFallbackModel('');
       setFallbackCondition('');
-      setMaxTokensPerTicket(150000);
-      setMaxUsdPerDay(8);
-      setMaxRetries(3);
-      setLocalError(null);
+      setMaxTokensPerTicket(LIMIT_DEFAULTS.maxTokensPerTicket);
+      setMaxUsdPerDay(LIMIT_DEFAULTS.maxUsdPerDay);
+      setMaxRetries(LIMIT_DEFAULTS.maxRetries);
     }
   }, [open, agentToEdit]);
 
-  // Espacios de trabajo salen SOLO de GET /api/admin/workspaces
-  const workspaceKeys = useMemo(() => {
-    const set = new Set<string>();
-    workspacesList.forEach((w) => set.add(w.id));
-    if (agentToEdit?.permissions?.workspaces) {
-      Object.keys(agentToEdit.permissions.workspaces).forEach((k) => set.add(k));
-    }
-    return Array.from(set);
-  }, [workspacesList, agentToEdit]);
-
-  // Modelos agrupados en Claude y Gemini
   const groupedModels = useMemo(() => {
     const claude = modelsList.filter(
-      (m) =>
-        m.provider.toLowerCase().includes('anthropic') ||
-        m.id.toLowerCase().includes('claude')
+      (m) => m.provider.toLowerCase().includes('anthropic') || m.id.toLowerCase().includes('claude')
     );
     const gemini = modelsList.filter(
-      (m) =>
-        m.provider.toLowerCase().includes('google') ||
-        m.id.toLowerCase().includes('gemini')
+      (m) => m.provider.toLowerCase().includes('google') || m.id.toLowerCase().includes('gemini')
     );
-    const others = modelsList.filter(
-      (m) => !claude.includes(m) && !gemini.includes(m)
-    );
-
+    const others = modelsList.filter((m) => !claude.includes(m) && !gemini.includes(m));
     return { claude, gemini, others };
   }, [modelsList]);
 
-  const handleAddFunction = () => {
-    const val = newFunctionInput.trim();
-    if (!val) return;
-    setFunctions((prev) => [...prev, val]);
-    setNewFunctionInput('');
-  };
+  const bossName =
+    reportsTo === CEO ? 'CEO' : (otherAgents.find((a) => a.id === reportsTo)?.name ?? undefined);
 
-  const handleAddRule = () => {
-    const val = newRuleInput.trim();
-    if (!val) return;
-    setRules((prev) => [...prev, val]);
-    setNewRuleInput('');
-  };
+  const generatedPrompt = useMemo(
+    () =>
+      generateSystemPromptPreview({
+        name,
+        role,
+        roleType,
+        reportsTo: bossName,
+        functions,
+        rules,
+        restrictions,
+      }),
+    [name, role, roleType, bossName, functions, rules, restrictions]
+  );
 
-  const handleAddRestriction = () => {
-    const val = newRestrictionInput.trim();
-    if (!val) return;
-    setRestrictions((prev) => [...prev, val]);
-    setNewRestrictionInput('');
-  };
+  const setFolder = (kind: keyof FolderAccess, level: FolderAccess[typeof kind]) =>
+    setPerms((p) => ({ ...p, folderAccess: { ...p.folderAccess, [kind]: level } }));
 
-  const toggleAction = (actId: string) => {
-    setActions((prev) =>
-      prev.includes(actId) ? prev.filter((a) => a !== actId) : [...prev, actId]
-    );
-  };
+  const toggleAction = (id: string) =>
+    setPerms((p) => ({
+      ...p,
+      actions: p.actions.includes(id) ? p.actions.filter((a) => a !== id) : [...p.actions, id],
+    }));
 
-  const toggleTransition = (from: TicketStatus, to: TicketStatus) => {
-    setTicketTransitions((prev) => {
-      const exists = prev.some(([f, t]) => f === from && t === to);
-      if (exists) {
-        return prev.filter(([f, t]) => !(f === from && t === to));
-      }
-      return [...prev, [from, to]];
+  const toggleTransition = (from: TicketStatus, to: TicketStatus) =>
+    setPerms((p) => {
+      const has = p.ticketTransitions.some(([f, t]) => f === from && t === to);
+      return {
+        ...p,
+        ticketTransitions: has
+          ? p.ticketTransitions.filter(([f, t]) => !(f === from && t === to))
+          : [...p.ticketTransitions, [from, to]],
+      };
     });
-  };
 
-  const generatedPrompt = useMemo(() => {
-    return generateSystemPromptPreview({
-      name,
-      role,
-      roleType,
-      reportsTo: reportsTo.trim() || undefined,
-      functions,
-      rules,
-      restrictions,
+  const scope: ProjectScope = perms.projectScope;
+  const toggleProject = (id: string) =>
+    setPerms((p) => {
+      const cur = p.projectScope === 'ALL' ? [] : p.projectScope;
+      return {
+        ...p,
+        projectScope: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+      };
     });
-  }, [name, role, roleType, reportsTo, functions, rules, restrictions]);
+
+  const validate = (): string | null => {
+    if (!name.trim()) return 'El nombre del agente es obligatorio.';
+    if (!role.trim()) return 'El rol funcional es obligatorio.';
+    if (!primaryModel) return 'Elige el modelo principal.';
+    if (!reportsTo) return 'Indica a quién reporta (CEO o un agente).';
+    if (!Number.isInteger(maxTokensPerTicket) || maxTokensPerTicket < 1 || maxTokensPerTicket > 10_000_000)
+      return 'Tokens por ticket: entero entre 1 y 10.000.000.';
+    if (!(maxUsdPerDay >= 0 && maxUsdPerDay <= 100_000)) return 'USD por día: entre 0 y 100.000.';
+    if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 20)
+      return 'Reintentos: entero entre 0 y 20.';
+    return null;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
-
-    if (!name.trim()) {
-      setLocalError('El nombre del agente es obligatorio.');
-      setActiveTab('profile');
+    const err = validate();
+    if (err) {
+      setLocalError(err);
       return;
     }
-
-    if (!role.trim()) {
-      setLocalError('El rol del agente es obligatorio.');
-      setActiveTab('profile');
-      return;
-    }
-
-    if (!primaryModel.trim()) {
-      setLocalError('Debes seleccionar un modelo principal.');
-      setActiveTab('model');
-      return;
-    }
-
+    const reports = reportsTo === CEO ? null : reportsTo;
+    const model = {
+      primary: primaryModel,
+      fallback: fallbackModel || null,
+      fallbackCondition: fallbackCondition.trim() || null,
+    };
+    const limits = { maxTokensPerTicket, maxUsdPerDay, maxRetries };
+    const avatar = { color: avatarColor, hairStyle, glasses, ...look };
     const payload: AgentCreatePayload = {
       name: name.trim(),
       role: role.trim(),
       roleType,
       character: character.trim() || undefined,
-      reportsTo: reportsTo.trim() || undefined,
-      avatar: {
-        color: avatarColor,
-        hairStyle,
-        glasses,
-        ...look,
-      },
+      reportsTo: reports,
+      avatar,
       functions,
       rules,
       restrictions,
-      permissions: {
-        workspaces,
-        actions,
-        ticketTransitions,
-        onlyAssignedTickets,
-      },
-      model: {
-        primary: primaryModel,
-        fallback: fallbackModel.trim() || null,
-        fallbackCondition: fallbackCondition.trim() || null,
-      },
-      limits: {
-        maxTokensPerTicket,
-        maxUsdPerDay,
-        maxRetries,
-      },
+      permissions: perms,
+      model,
+      limits,
     };
 
     const isEdit = Boolean(agentToEdit);
-    const changedFields: Partial<AgentCreatePayload> = {};
-
+    const changed: Partial<AgentCreatePayload> = {};
     if (isEdit && agentToEdit) {
-      if (name.trim() !== agentToEdit.name) changedFields.name = name.trim();
-      if (role.trim() !== agentToEdit.title) changedFields.role = role.trim();
-      if (roleType !== (agentToEdit.roleType ?? 'CUSTOM')) changedFields.roleType = roleType;
-      if (character.trim() !== (agentToEdit.character ?? '')) {
-        changedFields.character = character.trim() || undefined;
+      if (payload.name !== agentToEdit.name) changed.name = payload.name;
+      if (payload.role !== agentToEdit.title) changed.role = payload.role;
+      if (roleType !== (agentToEdit.roleType ?? 'CUSTOM')) changed.roleType = roleType;
+      if ((character.trim() || '') !== (agentToEdit.character ?? '')) {
+        changed.character = character.trim() || undefined;
       }
-      if (reportsTo.trim() !== (agentToEdit.reportsTo ?? '')) {
-        changedFields.reportsTo = reportsTo.trim() || undefined;
-      }
-
+      if (reports !== (agentToEdit.reportsTo ?? null)) changed.reportsTo = reports;
       const avatarChanged =
         avatarColor !== agentToEdit.color ||
         hairStyle !== (agentToEdit.hairStyle ?? 'short') ||
         glasses !== Boolean(agentToEdit.glasses) ||
         JSON.stringify(look) !== JSON.stringify(agentToEdit.look ?? {});
-      if (avatarChanged) {
-        changedFields.avatar = { color: avatarColor, hairStyle, glasses, ...look };
-      }
-
-      if (JSON.stringify(functions) !== JSON.stringify(agentToEdit.functions ?? [])) {
-        changedFields.functions = functions;
-      }
-      if (JSON.stringify(rules) !== JSON.stringify(agentToEdit.rules ?? [])) {
-        changedFields.rules = rules;
-      }
-      if (JSON.stringify(restrictions) !== JSON.stringify(agentToEdit.restrictions ?? [])) {
-        changedFields.restrictions = restrictions;
-      }
-
-      const currentPerms = { workspaces, actions, ticketTransitions, onlyAssignedTickets };
-      const origPerms = agentToEdit.permissions ?? {
-        workspaces: {},
-        actions: [],
-        ticketTransitions: [],
-        onlyAssignedTickets: true,
-      };
-      if (JSON.stringify(currentPerms) !== JSON.stringify(origPerms)) {
-        changedFields.permissions = currentPerms;
-      }
-
-      const currentModel = {
-        primary: primaryModel,
-        fallback: fallbackModel.trim() || null,
-        fallbackCondition: fallbackCondition.trim() || null,
-      };
+      if (avatarChanged) changed.avatar = avatar;
+      if (JSON.stringify(functions) !== JSON.stringify(agentToEdit.functions ?? []))
+        changed.functions = functions;
+      if (JSON.stringify(rules) !== JSON.stringify(agentToEdit.rules ?? [])) changed.rules = rules;
+      if (JSON.stringify(restrictions) !== JSON.stringify(agentToEdit.restrictions ?? []))
+        changed.restrictions = restrictions;
+      if (
+        JSON.stringify(perms) !== JSON.stringify(normalizePermissions(agentToEdit.permissions))
+      )
+        changed.permissions = perms;
       const origModel = agentToEdit.modelConfig ?? { primary: '' };
       if (
-        currentModel.primary !== origModel.primary ||
-        (currentModel.fallback || null) !== (origModel.fallback || null) ||
-        (currentModel.fallbackCondition || null) !== (origModel.fallbackCondition || null)
-      ) {
-        changedFields.model = currentModel;
-      }
-
-      const currentLimits = { maxTokensPerTicket, maxUsdPerDay, maxRetries };
-      const origLimits = agentToEdit.limits ?? {
-        maxTokensPerTicket: 150000,
-        maxUsdPerDay: 8,
-        maxRetries: 3,
-      };
-      if (JSON.stringify(currentLimits) !== JSON.stringify(origLimits)) {
-        changedFields.limits = currentLimits;
-      }
+        model.primary !== origModel.primary ||
+        (model.fallback || null) !== (origModel.fallback || null) ||
+        (model.fallbackCondition || null) !== (origModel.fallbackCondition || null)
+      )
+        changed.model = model;
+      const origLimits = agentToEdit.limits ?? LIMIT_DEFAULTS;
+      if (JSON.stringify(limits) !== JSON.stringify(origLimits)) changed.limits = limits;
     }
 
     try {
       setIsSubmitting(true);
-      await onSubmit(payload, isEdit, isEdit ? changedFields : undefined);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setLocalError(err.message);
-      } else {
-        setLocalError(
-          isEdit ? 'Error al actualizar el agente.' : 'Ocurrió un error al crear el agente.'
-        );
-      }
+      await onSubmit(payload, isEdit, isEdit ? changed : undefined);
+    } catch (e2: unknown) {
+      setLocalError(
+        e2 instanceof Error
+          ? e2.message
+          : isEdit
+            ? 'Error al actualizar el agente.'
+            : 'Ocurrió un error al crear el agente.'
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (!open) return null;
+
+  const modelOptions = (list: ApiModelInfo[]) =>
+    list.map((m) => (
+      <option key={m.id} value={m.id}>
+        {m.label}
+        {m.hasConnection ? '' : ' (sin clave)'}
+      </option>
+    ));
 
   return (
     <div
@@ -457,241 +457,152 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       aria-labelledby="create-agent-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5"
     >
-      {/* Backdrop */}
       <div
         className="fixed inset-0 bg-[#030712]/80 backdrop-blur-md transition-opacity"
         onClick={onClose}
       />
 
-      {/* Modal Dialog Card */}
-      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-700/80 bg-[#0A101C] text-slate-100 shadow-2xl shadow-cyan-950/40">
-        {/* Header with Title (sin selector de plantillas) */}
-        <div className="border-b border-slate-800/80 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-500/35 bg-cyan-500/10 text-cyan-400">
-                {agentToEdit ? (
-                  <Pencil className="h-5 w-5" />
-                ) : (
-                  <Sparkles className="h-5 w-5" />
-                )}
+      <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-700/80 bg-[#0A101C] text-slate-100 shadow-2xl shadow-cyan-950/40">
+        <div className="flex items-center justify-between border-b border-slate-800/80 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-500/35 bg-cyan-500/10 text-cyan-400">
+              {agentToEdit ? <Pencil className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+            </div>
+            <div>
+              <h2 id="create-agent-modal-title" className="text-base font-semibold text-slate-50">
+                {agentToEdit ? `Editar Agente: ${agentToEdit.name}` : 'Crear Nuevo Agente'}
+              </h2>
+              <p className="text-xs text-slate-400">
+                Lo obligatorio arriba; el resto, en secciones plegables con valores por defecto.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar modal"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            {localError && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {localError}
               </div>
-              <div>
-                <h2
-                  id="create-agent-modal-title"
-                  className="text-base font-semibold text-slate-50"
+            )}
+
+            {/* Obligatorios */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-300">
+                Nombre del Agente <span className="text-cyan-400">*</span>
+                <input
+                  type="text"
+                  value={name}
+                  maxLength={80}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej: Penny"
+                  className={inputCls}
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-300">
+                Rol funcional <span className="text-cyan-400">*</span>
+                <input
+                  type="text"
+                  value={role}
+                  maxLength={120}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="Ej: Frontend web y móvil"
+                  className={inputCls}
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-300">
+                Tipo de rol <span className="text-cyan-400">*</span>
+                <select
+                  value={roleType}
+                  onChange={(e) => setRoleType(e.target.value as RoleType)}
+                  className={inputCls}
                 >
-                  {agentToEdit
-                    ? `Editar Agente: ${agentToEdit.name}`
-                    : 'Crear Nuevo Agente'}
-                </h2>
-                <p className="text-xs text-slate-400">
-                  {agentToEdit
-                    ? 'Modifica funciones, reglas, restricciones, modelo y permisos del agente'
-                    : 'Configura perfiles, permisos duros, modelo y reglas del agente a mano'}
-                </p>
-              </div>
+                  {ROLE_TYPES.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-slate-300">
+                Modelo principal <span className="text-cyan-400">*</span>
+                <select
+                  value={primaryModel}
+                  onChange={(e) => setPrimaryModel(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">Selecciona un modelo…</option>
+                  {groupedModels.claude.length > 0 && (
+                    <optgroup label="Claude">{modelOptions(groupedModels.claude)}</optgroup>
+                  )}
+                  {groupedModels.gemini.length > 0 && (
+                    <optgroup label="Gemini">{modelOptions(groupedModels.gemini)}</optgroup>
+                  )}
+                  {groupedModels.others.length > 0 && (
+                    <optgroup label="Otros">{modelOptions(groupedModels.others)}</optgroup>
+                  )}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-slate-300 sm:col-span-2">
+                Reporta a <span className="text-cyan-400">*</span>
+                <select
+                  value={reportsTo}
+                  onChange={(e) => setReportsTo(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">Selecciona a quién reporta…</option>
+                  <option value={CEO}>CEO</option>
+                  {otherAgents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.title || a.roleType || 'Agente'})
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Cerrar modal"
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-800 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+            {/* Restricciones globales (siempre visibles, con candado) */}
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                <Lock className="h-3.5 w-3.5" />
+                Restricciones globales ({GLOBAL_RESTRICTIONS.length}) — no editables
+              </div>
+              <ol className="mt-2 space-y-1">
+                {GLOBAL_RESTRICTIONS.map((r, i) => (
+                  <li key={r} className="flex items-start gap-2 text-[11px] text-slate-300">
+                    <Lock className="mt-0.5 h-3 w-3 shrink-0 text-amber-400/80" />
+                    <span>
+                      {i + 1}. {r}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-1 border-b border-slate-800/80 bg-[#070B14] px-6 py-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === 'profile'
-                ? 'bg-slate-800 text-cyan-300 ring-1 ring-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <User className="h-3.5 w-3.5" />
-            <span>Perfil</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('behavior')}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === 'behavior'
-                ? 'bg-slate-800 text-cyan-300 ring-1 ring-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            <span>Funciones & Reglas</span>
-            <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px] text-slate-300">
-              {functions.length + rules.length + restrictions.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('permissions')}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === 'permissions'
-                ? 'bg-slate-800 text-cyan-300 ring-1 ring-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Shield className="h-3.5 w-3.5" />
-            <span>Permisos Duros</span>
-            <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px] text-cyan-400">
-              {actions.length} act.
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('model')}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === 'model'
-                ? 'bg-slate-800 text-cyan-300 ring-1 ring-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Cpu className="h-3.5 w-3.5" />
-            <span>Modelo & Límites</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('preview')}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              activeTab === 'preview'
-                ? 'bg-slate-800 text-cyan-300 ring-1 ring-cyan-500/30'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Eye className="h-3.5 w-3.5" />
-            <span>Vista Previa Prompt</span>
-          </button>
-        </div>
-
-        {/* Global/API Alert Banner */}
-        {(localError || fieldErrors.size > 0) && (
-          <div className="border-b border-rose-500/30 bg-rose-500/10 px-6 py-2.5 text-xs text-rose-300 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-            <span>
-              {localError ||
-                `Hay errores en el formulario (${fieldErrors.size} campos inválidos). Revisa las pestañas señaladas.`}
-            </span>
-          </div>
-        )}
-
-        {/* Form Body with Scroll */}
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* TAB 1: Profile & Avatar */}
-            {activeTab === 'profile' && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300">
-                      Nombre del Agente <span className="text-cyan-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Ej: Penny"
-                      className={`mt-1.5 w-full rounded-xl border bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none ${
-                        fieldErrors.has('name')
-                          ? 'border-rose-500 focus:border-rose-400'
-                          : 'border-slate-800 focus:border-cyan-400'
-                      }`}
-                    />
-                    {fieldErrors.has('name') && (
-                      <p className="mt-1 text-[11px] text-rose-400">
-                        {fieldErrors.get('name')}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300">
-                      Rol Funcional <span className="text-cyan-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      placeholder="Ej: Frontend web y móvil"
-                      className={`mt-1.5 w-full rounded-xl border bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none ${
-                        fieldErrors.has('role')
-                          ? 'border-rose-500 focus:border-rose-400'
-                          : 'border-slate-800 focus:border-cyan-400'
-                      }`}
-                    />
-                    {fieldErrors.has('role') && (
-                      <p className="mt-1 text-[11px] text-rose-400">
-                        {fieldErrors.get('role')}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* "Reporta a": selector con los agentes existentes, más "CEO" */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300">
-                      Reporta a
-                    </label>
-                    <select
-                      value={reportsTo}
-                      onChange={(e) => setReportsTo(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-                    >
-                      <option value="">Seleccionar a quién reporta...</option>
-                      <option value="CEO">CEO</option>
-                      {allAvailableAgents.map((ag) => (
-                        <option key={ag.id} value={ag.name}>
-                          {ag.name} ({ag.title || ag.roleType || 'Agente'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300">
-                      Tipo de Rol (`role_type`)
-                    </label>
-                    <select
-                      value={roleType}
-                      onChange={(e) => setRoleType(e.target.value as RoleType)}
-                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-                    >
-                      <option value="CUSTOM">CUSTOM (Personalizado)</option>
-                      <option value="CTO">CTO (Orquestador principal)</option>
-                      <option value="DEV_BACKEND">DEV_BACKEND (Backend & Core)</option>
-                      <option value="DEV_FRONTEND">DEV_FRONTEND (Frontend & UI)</option>
-                      <option value="QA">QA (Calidad & Seguridad)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300">
-                      Personaje / Referencia
-                    </label>
-                    <input
-                      type="text"
-                      value={character}
-                      onChange={(e) => setCharacter(e.target.value)}
-                      placeholder="Ej: Penny"
-                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Editor completo del personaje: género, piel, cabello, ropa, colores y más (BLOQUEADO) */}
+            {/* Plegables */}
+            <Collapsible title="Personaje y avatar" hint="Por defecto: nombre del agente, avatar cian">
+              <label className="block text-xs font-medium text-slate-300">
+                Personaje / Referencia
+                <input
+                  type="text"
+                  value={character}
+                  maxLength={80}
+                  onChange={(e) => setCharacter(e.target.value)}
+                  placeholder="Ej: Penny"
+                  className={inputCls}
+                />
+              </label>
+              <div className="mt-4">
                 <AvatarEditor
                   name={name}
                   color={avatarColor}
@@ -704,657 +615,293 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                   onLook={(patch) => setLook((prev) => ({ ...prev, ...patch }))}
                 />
               </div>
-            )}
+            </Collapsible>
 
-            {/* TAB 2: Functions, Rules & Restrictions */}
-            {activeTab === 'behavior' && (
-              <div className="space-y-6">
-                {/* 1. Functions */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-200">
-                        Funciones del Agente (Qué hace)
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Responsabilidades principales que el agente persigue en sus tickets.
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs text-cyan-400">
-                      {functions.length} funciones
-                    </span>
-                  </div>
+            <Collapsible title="Funciones" hint={`${functions.length} · por defecto: ninguna`}>
+              <ListEditor
+                items={functions}
+                onChange={setFunctions}
+                placeholder="Qué hace este agente (Enter para añadir)"
+              />
+            </Collapsible>
 
-                  <div className="space-y-2">
-                    {functions.map((fn, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0A101C] px-3.5 py-2 text-xs text-slate-200"
-                      >
-                        <span className="flex-1">{fn}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFunctions((prev) => prev.filter((_, i) => i !== idx))
-                          }
-                          className="text-slate-500 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+            <Collapsible title="Reglas" hint={`${rules.length} · por defecto: ninguna`}>
+              <ListEditor
+                items={rules}
+                onChange={setRules}
+                placeholder="Cómo trabaja (Enter para añadir)"
+              />
+            </Collapsible>
 
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={newFunctionInput}
-                      onChange={(e) => setNewFunctionInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddFunction();
-                        }
-                      }}
-                      placeholder="Añadir nueva función y presionar Enter..."
-                      className="flex-1 rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddFunction}
-                      className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-300 hover:bg-cyan-500/20"
+            <Collapsible title="Restricciones propias" hint={`${restrictions.length} · por defecto: ninguna`}>
+              <ListEditor
+                items={restrictions}
+                onChange={setRestrictions}
+                placeholder="Qué nunca debe hacer (Enter para añadir)"
+              />
+              <p className="mt-2 text-[11px] text-slate-500">
+                Las 6 restricciones globales se aplican siempre y no se pueden quitar.
+              </p>
+            </Collapsible>
+
+            <Collapsible
+              title="Permisos"
+              hint={`Carpetas, proyectos, acciones y transiciones · por defecto: sin acceso`}
+            >
+              {/* Acceso por tipo de carpeta */}
+              <div>
+                <h4 className="text-xs font-semibold text-slate-200">Acceso por tipo de carpeta</h4>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Se aplica a todos los espacios de ese tipo, dentro del alcance de proyectos.
+                </p>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {FOLDER_KINDS.map((k) => (
+                    <label
+                      key={k.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-[#070B14] px-3 py-2 text-xs text-slate-300"
                     >
-                      Añadir
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Rules */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-200">
-                        Reglas Operativas (Cómo trabaja)
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Normas blandas de calidad, comunicación y determinismo.
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs text-emerald-400">
-                      {rules.length} reglas
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {rules.map((rl, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0A101C] px-3.5 py-2 text-xs text-slate-200"
-                      >
-                        <span className="flex-1">{rl}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setRules((prev) => prev.filter((_, i) => i !== idx))
-                          }
-                          className="text-slate-500 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={newRuleInput}
-                      onChange={(e) => setNewRuleInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddRule();
-                        }
-                      }}
-                      placeholder="Añadir nueva regla y presionar Enter..."
-                      className="flex-1 rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddRule}
-                      className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20"
-                    >
-                      Añadir
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. Own Restrictions */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-200">
-                        Restricciones Propias del Agente
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Límites de alcance propios del rol (ej: no toca base de datos).
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs text-amber-400">
-                      {restrictions.length} propias
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {restrictions.map((rst, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-800/80 bg-[#0A101C] px-3.5 py-2 text-xs text-slate-200"
-                      >
-                        <span className="flex-1">{rst}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setRestrictions((prev) =>
-                              prev.filter((_, i) => i !== idx)
-                            )
-                          }
-                          className="text-slate-500 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={newRestrictionInput}
-                      onChange={(e) => setNewRestrictionInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddRestriction();
-                        }
-                      }}
-                      placeholder="Añadir restricción propia y presionar Enter..."
-                      className="flex-1 rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddRestriction}
-                      className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
-                    >
-                      Añadir
-                    </button>
-                  </div>
-                </div>
-
-                {/* 4. Global Restrictions (6 inviolables, bloqueadas con candado) */}
-                <div className="rounded-2xl border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-amber-300">
-                    <Lock className="h-4 w-4" />
-                    <h4 className="text-xs font-semibold">
-                      Restricciones Globales Inviolables ({GLOBAL_RESTRICTIONS.length} bloqueadas con candado)
-                    </h4>
-                  </div>
-                  <p className="text-[11px] text-amber-200/80">
-                    Estas restricciones son aplicadas rigurosamente con código por la API
-                    y se inyectan automáticamente en el prompt del servidor. No pueden ser
-                    modificadas ni removidas por ningún usuario.
-                  </p>
-
-                  <div className="space-y-2">
-                    {GLOBAL_RESTRICTIONS.map((glob, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2.5 rounded-xl border border-amber-500/20 bg-[#070B14]/80 px-3.5 py-2 text-xs text-amber-100/90"
-                      >
-                        <Lock className="h-3 w-3 shrink-0 text-amber-400" />
-                        <span>
-                          <strong className="text-amber-400">{idx + 1}.</strong> {glob}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3: Permissions (Workspaces, Actions, Transitions) */}
-            {activeTab === 'permissions' && (
-              <div className="space-y-6">
-                {/* Workspaces: salen SOLO de GET /api/admin/workspaces */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-200">
-                        Espacios de Trabajo (`permissions.workspaces`)
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Nivel de acceso en las carpetas de trabajo configuradas en el servidor.
-                      </p>
-                    </div>
-                    <HardDrive className="h-4 w-4 text-cyan-400" />
-                  </div>
-
-                  {workspacesList.length === 0 ? (
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-xs text-amber-200">
-                          <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
-                          <span>
-                            No hay espacios de trabajo. Créalos en Administración → Espacios de trabajo
-                          </span>
-                        </div>
-                        {onNavigateToWorkspaces && (
-                          <button
-                            type="button"
-                            onClick={onNavigateToWorkspaces}
-                            className="rounded-lg border border-amber-400/40 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/30 transition-all shrink-0"
-                          >
-                            Ir a Espacios de trabajo
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      {workspaceKeys.map((wsKey) => {
-                        const wsInfo = workspacesList.find((w) => w.id === wsKey);
-                        return (
-                          <div
-                            key={wsKey}
-                            className="rounded-xl border border-slate-800 bg-[#0A101C] p-3"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-mono text-xs font-semibold text-cyan-300 uppercase">
-                                {wsKey}
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                {workspaces[wsKey] ?? 'none'}
-                              </span>
-                            </div>
-                            {wsInfo?.name && wsInfo.name !== wsKey && (
-                              <div className="mt-0.5 truncate text-[10px] text-slate-400">
-                                {wsInfo.name}
-                              </div>
-                            )}
-                            <select
-                              value={workspaces[wsKey] ?? 'none'}
-                              onChange={(e) =>
-                                setWorkspaces((prev) => ({
-                                  ...prev,
-                                  [wsKey]: e.target.value as WorkspaceLevel,
-                                }))
-                              }
-                              className="mt-2 w-full rounded-lg border border-slate-800 bg-[#070B14] px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                            >
-                              {WORKSPACE_LEVELS.map((lvl) => (
-                                <option key={lvl.value} value={lvl.value}>
-                                  {lvl.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* El error 400 de permissions.workspaces se muestra bajo ese campo */}
-                  {fieldErrors.has('permissions.workspaces') && (
-                    <p className="mt-2 text-xs text-rose-400">
-                      {fieldErrors.get('permissions.workspaces')}
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions Checklist */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-200">
-                        Acciones Permitidas (`permissions.actions`)
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Lista cerrada de acciones seguras. Las acciones prohibidas
-                        (merge main, secrets.read, etc.) no están disponibles.
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs text-cyan-400">
-                      {actions.length} seleccionadas
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {ACTION_DEFINITIONS.map((act) => {
-                      const isChecked = actions.includes(act.id);
-                      const isCtoRestricted =
-                        act.onlyFor === 'CTO' && roleType !== 'CTO';
-
-                      return (
-                        <label
-                          key={act.id}
-                          className={`flex items-start gap-2.5 rounded-xl border p-2.5 transition-all cursor-pointer ${
-                            isCtoRestricted
-                              ? 'opacity-50 border-slate-800/50 bg-[#070B14]'
-                              : isChecked
-                              ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-100'
-                              : 'border-slate-800/80 bg-[#0A101C] text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            disabled={isCtoRestricted}
-                            onChange={() => toggleAction(act.id)}
-                            className="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-medium">
-                                {act.label}
-                              </span>
-                              {act.onlyFor && (
-                                <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] font-semibold text-amber-300">
-                                  Solo {act.onlyFor}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate">
-                              {act.description}
-                            </p>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Ticket Transitions Matrix */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-200">
-                        Transiciones de Tickets Autorizadas
-                      </h4>
-                      <p className="text-[11px] text-slate-400">
-                        Grafo de transiciones del flujo de trabajo (§19.4).
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs text-cyan-400">
-                      {ticketTransitions.length} transiciones
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {VALID_TRANSITIONS.map(([from, to]) => {
-                      const key = `${from}->${to}`;
-                      const isChecked = ticketTransitions.some(
-                        ([f, t]) => f === from && t === to
-                      );
-
-                      return (
-                        <label
-                          key={key}
-                          className={`flex items-center gap-2.5 rounded-xl border p-2.5 transition-all cursor-pointer ${
-                            isChecked
-                              ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
-                              : 'border-slate-800/80 bg-[#0A101C] text-slate-400 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleTransition(from, to)}
-                            className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400"
-                          />
-                          <span className="text-xs font-medium">
-                            {TRANSITION_LABELS[key] ?? `${from} → ${to}`}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800">
-                    <label className="flex items-center gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={onlyAssignedTickets}
-                        onChange={(e) => setOnlyAssignedTickets(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400"
-                      />
-                      <span className="text-xs text-slate-300 font-medium">
-                        Restringir transiciones solo a tickets explícitamente asignados a este agente (`onlyAssignedTickets`)
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 4: Model & Limits (agrupados en Claude y Gemini con sin conexión) */}
-            {activeTab === 'model' && (
-              <div className="space-y-6">
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-4">
-                  <h4 className="text-xs font-semibold text-slate-200">
-                    Configuración de Modelo de Lenguaje
-                  </h4>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-xs text-slate-400">
-                        Modelo Principal (`primary`) <span className="text-cyan-400">*</span>
-                      </label>
+                      {k.label}
                       <select
-                        value={primaryModel}
-                        onChange={(e) => setPrimaryModel(e.target.value)}
-                        className={`mt-1.5 w-full rounded-xl border bg-[#070B14] px-3 py-2 text-xs text-slate-200 focus:outline-none ${
-                          fieldErrors.has('model.primary')
-                            ? 'border-rose-500 focus:border-rose-400'
-                            : 'border-slate-800 focus:border-cyan-400'
+                        value={perms.folderAccess[k.id]}
+                        onChange={(e) =>
+                          setFolder(k.id, e.target.value as FolderAccess[typeof k.id])
+                        }
+                        aria-label={`Acceso a carpetas ${k.label}`}
+                        className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
+                      >
+                        {WORKSPACE_LEVELS.map((l) => (
+                          <option key={l.value} value={l.value}>
+                            {l.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Alcance de proyectos */}
+              <div className="mt-5">
+                <h4 className="text-xs font-semibold text-slate-200">Alcance de proyectos</h4>
+                <label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="radio"
+                    name="project-scope"
+                    checked={scope === 'ALL'}
+                    onChange={() => setPerms((p) => ({ ...p, projectScope: 'ALL' }))}
+                    className="h-3.5 w-3.5 text-cyan-500"
+                  />
+                  Todos los proyectos (actuales y futuros)
+                </label>
+                <label className="mt-1.5 flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="radio"
+                    name="project-scope"
+                    checked={scope !== 'ALL'}
+                    onChange={() =>
+                      setPerms((p) => ({ ...p, projectScope: p.projectScope === 'ALL' ? [] : p.projectScope }))
+                    }
+                    className="h-3.5 w-3.5 text-cyan-500"
+                  />
+                  Solo estos proyectos
+                </label>
+                {scope !== 'ALL' && (
+                  <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {projectsList.filter((p) => p.status === 'ACTIVE' || scope.includes(p.id)).length ===
+                    0 ? (
+                      <p className="text-[11px] text-amber-400">
+                        No hay proyectos: créalos en Administración → Proyectos.
+                      </p>
+                    ) : (
+                      projectsList
+                        .filter((p) => p.status === 'ACTIVE' || scope.includes(p.id))
+                        .map((p) => (
+                          <label
+                            key={p.id}
+                            className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-300"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={scope.includes(p.id)}
+                              onChange={() => toggleProject(p.id)}
+                              className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
+                            />
+                            {p.name}
+                          </label>
+                        ))
+                    )}
+                  </div>
+                )}
+                {scope !== 'ALL' && scope.length === 0 && (
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    Sin proyectos seleccionados: el agente no verá ninguna carpeta.
+                  </p>
+                )}
+              </div>
+
+              {/* Acciones */}
+              <div className="mt-5">
+                <h4 className="text-xs font-semibold text-slate-200">Acciones permitidas</h4>
+                <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {ACTION_DEFINITIONS.map((a) => {
+                    const blocked = a.onlyFor !== undefined && a.onlyFor !== roleType;
+                    return (
+                      <label
+                        key={a.id}
+                        title={a.description}
+                        className={`flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs ${
+                          blocked ? 'opacity-40' : 'text-slate-300'
                         }`}
                       >
-                        <option value="">Selecciona un modelo...</option>
-                        {groupedModels.claude.length > 0 && (
-                          <optgroup label="Claude">
-                            {groupedModels.claude.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label} {!m.hasConnection ? '— sin conexión' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {groupedModels.gemini.length > 0 && (
-                          <optgroup label="Gemini">
-                            {groupedModels.gemini.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label} {!m.hasConnection ? '— sin conexión' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {groupedModels.others.length > 0 && (
-                          <optgroup label="Otros Modelos">
-                            {groupedModels.others.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label} {!m.hasConnection ? '— sin conexión' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                      {fieldErrors.has('model.primary') && (
-                        <p className="mt-1 text-[11px] text-rose-400">
-                          {fieldErrors.get('model.primary')}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-400">
-                        Modelo de Respaldo (`fallback`)
+                        <input
+                          type="checkbox"
+                          disabled={blocked}
+                          checked={perms.actions.includes(a.id)}
+                          onChange={() => toggleAction(a.id)}
+                          className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
+                        />
+                        {a.label}
+                        {blocked && <Lock className="h-3 w-3 text-slate-500" />}
                       </label>
-                      <select
-                        value={fallbackModel}
-                        onChange={(e) => setFallbackModel(e.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                      >
-                        <option value="">Sin respaldo</option>
-                        {groupedModels.claude.length > 0 && (
-                          <optgroup label="Claude">
-                            {groupedModels.claude.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label} {!m.hasConnection ? '— sin conexión' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {groupedModels.gemini.length > 0 && (
-                          <optgroup label="Gemini">
-                            {groupedModels.gemini.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label} {!m.hasConnection ? '— sin conexión' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {groupedModels.others.length > 0 && (
-                          <optgroup label="Otros Modelos">
-                            {groupedModels.others.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label} {!m.hasConnection ? '— sin conexión' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                    </div>
-                  </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-                  <div>
-                    <label className="block text-xs text-slate-400">
-                      Condición de Respaldo (`fallbackCondition`)
+              {/* Transiciones */}
+              <div className="mt-5">
+                <h4 className="text-xs font-semibold text-slate-200">Transiciones de tickets</h4>
+                <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {VALID_TRANSITIONS.map(([from, to]) => (
+                    <label
+                      key={`${from}-${to}`}
+                      className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-300"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={perms.ticketTransitions.some(([f, t]) => f === from && t === to)}
+                        onChange={() => toggleTransition(from, to)}
+                        className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
+                      />
+                      {TRANSITION_LABELS[`${from}->${to}`] ?? `${from} → ${to}`}
                     </label>
-                    <input
-                      type="text"
-                      value={fallbackCondition}
-                      onChange={(e) => setFallbackCondition(e.target.value)}
-                      placeholder="Ej: Si falla 2 veces seguidas en el mismo bug."
-                      className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
-                    />
-                  </div>
+                  ))}
                 </div>
-
-                {/* Limits */}
-                <div className="rounded-2xl border border-slate-800 bg-[#070C16] p-4 space-y-4">
-                  <h4 className="text-xs font-semibold text-slate-200">
-                    Límites Operativos & Presupuesto
-                  </h4>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="block text-xs text-slate-400">
-                        Tokens Máximos / Ticket
-                      </label>
-                      <input
-                        type="number"
-                        min={1000}
-                        step={5000}
-                        value={maxTokensPerTicket}
-                        onChange={(e) =>
-                          setMaxTokensPerTicket(Number(e.target.value) || 0)
-                        }
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-400">
-                        Presupuesto Diario (USD)
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={maxUsdPerDay}
-                        onChange={(e) =>
-                          setMaxUsdPerDay(Number(e.target.value) || 0)
-                        }
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-400">
-                        Reintentos Máximos
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={maxRetries}
-                        onChange={(e) =>
-                          setMaxRetries(Number(e.target.value) || 3)
-                        }
-                        className="mt-1.5 w-full rounded-xl border border-slate-800 bg-[#070B14] px-3.5 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={perms.onlyAssignedTickets}
+                    onChange={(e) =>
+                      setPerms((p) => ({ ...p, onlyAssignedTickets: e.target.checked }))
+                    }
+                    className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
+                  />
+                  Solo puede mover tickets asignados a él
+                </label>
               </div>
-            )}
+            </Collapsible>
 
-            {/* TAB 5: Prompt Preview */}
-            {activeTab === 'preview' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-200">
-                    <FileCode className="h-4 w-4 text-cyan-400" />
-                    <h4 className="text-xs font-semibold">
-                      Vista Previa del `system_prompt` Generado
-                    </h4>
-                  </div>
-                  <span className="text-[11px] text-slate-400">
-                    Se generará idéntico en el servidor al guardar
-                  </span>
-                </div>
-
-                <div className="relative rounded-2xl border border-slate-800 bg-[#050810] p-4 font-mono text-xs text-slate-300 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-all">
-                  {generatedPrompt}
-                </div>
+            <Collapsible
+              title="Límites"
+              hint={`${maxTokensPerTicket.toLocaleString('es')} tokens · ${maxUsdPerDay} USD/día · ${maxRetries} reintentos`}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <label className="block text-xs font-medium text-slate-300">
+                  Tokens por ticket
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000000}
+                    step={1}
+                    value={maxTokensPerTicket}
+                    onChange={(e) => setMaxTokensPerTicket(Number(e.target.value))}
+                    className={inputCls}
+                  />
+                  <span className="mt-1 block text-[10px] text-slate-500">1 – 10.000.000 (def. 150.000)</span>
+                </label>
+                <label className="block text-xs font-medium text-slate-300">
+                  USD por día
+                  <input
+                    type="number"
+                    min={0}
+                    max={100000}
+                    step="any"
+                    value={maxUsdPerDay}
+                    onChange={(e) => setMaxUsdPerDay(Number(e.target.value))}
+                    className={inputCls}
+                  />
+                  <span className="mt-1 block text-[10px] text-slate-500">0 – 100.000 (def. 8)</span>
+                </label>
+                <label className="block text-xs font-medium text-slate-300">
+                  Reintentos
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    step={1}
+                    value={maxRetries}
+                    onChange={(e) => setMaxRetries(Number(e.target.value))}
+                    className={inputCls}
+                  />
+                  <span className="mt-1 block text-[10px] text-slate-500">0 – 20 (def. 3)</span>
+                </label>
               </div>
-            )}
+            </Collapsible>
+
+            <Collapsible title="Modelo de respaldo" hint="Por defecto: ninguno">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block text-xs font-medium text-slate-300">
+                  Modelo de respaldo
+                  <select
+                    value={fallbackModel}
+                    onChange={(e) => setFallbackModel(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">Sin respaldo</option>
+                    {modelsList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs font-medium text-slate-300">
+                  Condición de uso
+                  <input
+                    type="text"
+                    value={fallbackCondition}
+                    maxLength={200}
+                    onChange={(e) => setFallbackCondition(e.target.value)}
+                    placeholder="Ej: solo en compuertas 2 y 4"
+                    className={inputCls}
+                  />
+                </label>
+              </div>
+            </Collapsible>
+
+            <Collapsible title="Vista previa del prompt" hint="Lo genera el servidor al guardar">
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-slate-800 bg-[#070B14] p-3 text-[11px] leading-relaxed text-slate-300">
+                {generatedPrompt}
+              </pre>
+            </Collapsible>
           </div>
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end border-t border-slate-800/80 bg-[#070B14] px-6 py-4">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 transition-all hover:from-cyan-300 hover:to-sky-300 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <span>Guardando...</span>
-                ) : (
-                  <>
-                    <Check className="h-4 w-4" />
-                    <span>{agentToEdit ? 'Guardar Cambios' : 'Crear Agente'}</span>
-                  </>
-                )}
-              </button>
-            </div>
+          <div className="flex items-center justify-end gap-2.5 border-t border-slate-800/80 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-700/80 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 disabled:opacity-60"
+            >
+              {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {agentToEdit ? 'Guardar cambios' : 'Crear agente'}
+            </button>
           </div>
         </form>
       </div>

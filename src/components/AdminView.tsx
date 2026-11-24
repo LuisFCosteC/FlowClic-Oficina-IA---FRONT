@@ -146,7 +146,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const displayedAgents = fetchedAgents ?? agents.filter((a) => showArchived || !a.archivedAt);
+  const baseAgents = fetchedAgents ?? agents.filter((a) => showArchived || !a.archivedAt);
+  // Selector global de proyecto: solo agentes con alcance "Todos" o que incluyan ese proyecto.
+  const displayedAgents =
+    projectFilter === 'all'
+      ? baseAgents
+      : baseAgents.filter((a) => {
+          const scope = a.permissions?.projectScope ?? 'ALL';
+          return scope === 'ALL' || scope.includes(projectFilter);
+        });
+  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
+  const scopeLabel = (a: Agent): string => {
+    const scope = a.permissions?.projectScope ?? 'ALL';
+    if (scope === 'ALL') return 'Todos';
+    if (scope.length === 0) return 'Ninguno';
+    return scope.map((id) => projectNameById.get(id) ?? id).join(', ');
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -276,7 +291,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <th className="px-3 py-2.5 font-medium">Rol</th>
                       <th className="px-3 py-2.5 font-medium">Estado</th>
                       <th className="px-3 py-2.5 font-medium">Modelo</th>
-                      <th className="px-3 py-2.5 font-medium">Proyecto</th>
+                      <th className="px-3 py-2.5 font-medium">Reporta a</th>
+                      <th className="px-3 py-2.5 font-medium">Proyectos</th>
                       <th className="px-5 py-2.5 text-right font-medium">Acciones</th>
                     </tr>
                   </thead>
@@ -320,7 +336,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             <td className="px-3 py-3 font-mono text-cyan-400">
                               {getModelDisplayName(a.model ?? a.modelConfig?.primary ?? a.modelTier)}
                             </td>
-                            <td className="px-3 py-3 text-slate-400">{a.project || '—'}</td>
+                            <td className="px-3 py-3 text-slate-400">
+                              {a.reportsTo
+                                ? (baseAgents.find((x) => x.id === a.reportsTo)?.name ?? '—')
+                                : 'CEO'}
+                            </td>
+                            <td className="px-3 py-3 text-slate-300">{scopeLabel(a)}</td>
                             <td className="px-5 py-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button

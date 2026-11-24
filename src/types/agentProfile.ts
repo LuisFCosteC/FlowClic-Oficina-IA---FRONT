@@ -5,6 +5,7 @@ export type WorkspaceLevel = 'none' | 'read' | 'tests' | 'qa_report' | 'write';
 export type TicketStatus =
   | 'PENDING'
   | 'IN_PROGRESS'
+  | 'IN_SENIOR_REVIEW'
   | 'IN_QA'
   | 'IN_REVIEW'
   | 'DONE'
@@ -45,8 +46,33 @@ export interface AgentAvatarProfile extends AvatarLook {
   hairStyle?: HairStyle;
 }
 
+/** Tipos de carpeta sobre los que se concede acceso (PERM01). */
+export type FolderKind = 'api' | 'front' | 'docs' | 'mobile' | 'other';
+
+export const FOLDER_KINDS: Array<{ id: FolderKind; label: string }> = [
+  { id: 'api', label: 'API' },
+  { id: 'front', label: 'Front' },
+  { id: 'docs', label: 'Docs' },
+  { id: 'mobile', label: 'Móvil' },
+  { id: 'other', label: 'Otro' },
+];
+
+export type FolderAccess = Record<FolderKind, WorkspaceLevel>;
+
+export const EMPTY_FOLDER_ACCESS: FolderAccess = {
+  api: 'none',
+  front: 'none',
+  docs: 'none',
+  mobile: 'none',
+  other: 'none',
+};
+
+/** "ALL" = todos los proyectos, actuales y futuros; o una lista de ids de proyecto. */
+export type ProjectScope = 'ALL' | string[];
+
 export interface AgentPermissions {
-  workspaces: Record<string, WorkspaceLevel>;
+  folderAccess: FolderAccess;
+  projectScope: ProjectScope;
   actions: string[];
   ticketTransitions: Array<[TicketStatus, TicketStatus]>;
   onlyAssignedTickets: boolean;
@@ -85,7 +111,8 @@ export interface AgentCreatePayload {
   role: string;
   roleType: RoleType;
   character?: string;
-  reportsTo?: string;
+  /** id del agente al que reporta; null = el CEO. */
+  reportsTo?: string | null;
   avatar?: AgentAvatarProfile;
   functions: string[];
   rules: string[];
@@ -208,7 +235,9 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
 
 export const VALID_TRANSITIONS: Array<[TicketStatus, TicketStatus]> = [
   ['PENDING', 'IN_PROGRESS'],
-  ['IN_PROGRESS', 'IN_QA'],
+  ['IN_PROGRESS', 'IN_SENIOR_REVIEW'],
+  ['IN_SENIOR_REVIEW', 'IN_QA'],
+  ['IN_SENIOR_REVIEW', 'RETURNED'],
   ['IN_QA', 'IN_REVIEW'],
   ['IN_QA', 'RETURNED'],
   ['IN_REVIEW', 'DONE'],
@@ -218,11 +247,13 @@ export const VALID_TRANSITIONS: Array<[TicketStatus, TicketStatus]> = [
 
 export const TRANSITION_LABELS: Record<string, string> = {
   'PENDING->IN_PROGRESS': 'PENDIENTE → EN CURSO',
-  'IN_PROGRESS->IN_QA': 'EN CURSO → EN QA',
-  'IN_QA->IN_REVIEW': 'EN QA → EN REVISIÓN',
+  'IN_PROGRESS->IN_SENIOR_REVIEW': 'EN CURSO → REVISIÓN SENIOR',
+  'IN_SENIOR_REVIEW->IN_QA': 'REVISIÓN SENIOR → EN QA',
+  'IN_SENIOR_REVIEW->RETURNED': 'REVISIÓN SENIOR → DEVUELTA',
+  'IN_QA->IN_REVIEW': 'EN QA → REVISIÓN CTO',
   'IN_QA->RETURNED': 'EN QA → DEVUELTA',
-  'IN_REVIEW->DONE': 'EN REVISIÓN → HECHO',
-  'IN_REVIEW->RETURNED': 'EN REVISIÓN → DEVUELTA',
+  'IN_REVIEW->DONE': 'REVISIÓN CTO → HECHO',
+  'IN_REVIEW->RETURNED': 'REVISIÓN CTO → DEVUELTA',
   'RETURNED->IN_PROGRESS': 'DEVUELTA → EN CURSO',
 };
 

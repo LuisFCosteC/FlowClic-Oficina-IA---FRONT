@@ -305,6 +305,8 @@ export interface ApiAgentCreate {
   model?: AgentModelConfig;
   limits?: AgentLimits;
   project?: string | null;
+  /** id del agente al que reporta; null = el CEO. */
+  reportsTo?: string | null;
 }
 
 export type ApiAgentUpdate = Partial<ApiAgentCreate>;

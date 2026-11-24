@@ -242,6 +242,9 @@ export default function App() {
           ...(changedFields?.permissions !== undefined ? { permissions: changedFields.permissions } : {}),
           ...(changedFields?.model !== undefined ? { model: changedFields.model } : {}),
           ...(changedFields?.limits !== undefined ? { limits: changedFields.limits } : {}),
+          ...(changedFields && 'reportsTo' in changedFields
+            ? { reportsTo: changedFields.reportsTo ?? null }
+            : {}),
         };
         const updated = await api.updateAgent(editingAgent.id, body);
         dispatch({ type: 'agent.upsert', agent: updated });
@@ -260,6 +263,7 @@ export default function App() {
           permissions: payload.permissions,
           model: payload.model,
           limits: payload.limits,
+          reportsTo: payload.reportsTo ?? null,
           ...(payload.project ? { project: payload.project } : {}),
         };
         const created = await api.createAgent(body);
