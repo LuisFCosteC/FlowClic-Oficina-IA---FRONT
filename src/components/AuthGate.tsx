@@ -17,7 +17,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({ user: null, logout: async () => {} });
 export const useAuth = (): AuthContextValue => useContext(AuthContext);
 
-type Phase = 'checking' | 'login' | 'change' | 'ready';
+type Phase = 'checking' | 'login' | 'change' | 'ready' | 'migrate';
 
 const MIN_PASSWORD = 12;
 
@@ -229,6 +229,7 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
       setPhase(me.mustChangePassword ? 'change' : 'ready');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setPhase('login');
+      else if (err instanceof ApiError && err.code === 'MIGRATION_REQUIRED') setPhase('migrate');
       else setPhase('ready'); // API caída, modo SETUP o BD por migrar: la app lo explica con su aviso
     }
   }, []);
@@ -248,6 +249,13 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
     };
   }, [check]);
 
+  // Con la BD por migrar se reintenta solo hasta que la API responda.
+  useEffect(() => {
+    if (phase !== 'migrate') return;
+    const id = window.setInterval(() => void check(), 3000);
+    return () => window.clearInterval(id);
+  }, [phase, check]);
+
   const logout = useCallback(async () => {
     try {
       await api.logout();
@@ -264,6 +272,27 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
       <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
         <Loader2 className="h-4 w-4 animate-spin" />
         Conectando…
+      </div>
+    );
+  }
+  if (phase === 'migrate') {
+    return shell(
+      <div className="space-y-3 text-sm">
+        <div className="flex items-center gap-2 font-semibold text-amber-300">
+          <AlertCircle className="h-4 w-4" />
+          Falta migrar la base de datos
+        </div>
+        <p className="text-xs text-slate-400">
+          La API arrancó pero a la BD le faltan migraciones. En la terminal de la API ejecuta (con
+          el Python del entorno virtual, no el del sistema):
+        </p>
+        <pre className="overflow-x-auto rounded-xl border border-slate-800 bg-[#070B14] p-3 text-[11px] text-cyan-300">
+{`.\.venv\Scripts\python -m app.db.migrate`}
+        </pre>
+        <p className="flex items-center gap-2 text-[11px] text-slate-500">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Reintentando solo cada 3 segundos…
+        </p>
       </div>
     );
   }
