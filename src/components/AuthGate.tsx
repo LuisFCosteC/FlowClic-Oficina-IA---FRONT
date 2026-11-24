@@ -287,7 +287,7 @@ export const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
           el Python del entorno virtual, no el del sistema):
         </p>
         <pre className="overflow-x-auto rounded-xl border border-slate-800 bg-[#070B14] p-3 text-[11px] text-cyan-300">
-{`.\.venv\Scripts\python -m app.db.migrate`}
+{'.\\.venv\\Scripts\\python -m app.db.migrate'}
         </pre>
         <p className="flex items-center gap-2 text-[11px] text-slate-500">
           <Loader2 className="h-3 w-3 animate-spin" />
