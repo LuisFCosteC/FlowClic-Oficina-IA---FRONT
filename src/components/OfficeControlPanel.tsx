@@ -75,6 +75,118 @@ interface OfficeControlPanelProps {
   onCreateAgent?: () => void;
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Pendiente',
+  IN_PROGRESS: 'En curso',
+  IN_SENIOR_REVIEW: 'Revisión senior',
+  IN_QA: 'En QA',
+  IN_REVIEW: 'Revisión CTO',
+  RETURNED: 'Devuelta',
+  DONE: 'Hecha',
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  PENDING: 'border-slate-600/60 bg-slate-800/70 text-slate-300',
+  IN_PROGRESS: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+  IN_SENIOR_REVIEW: 'border-violet-500/40 bg-violet-500/10 text-violet-300',
+  IN_QA: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+  IN_REVIEW: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300',
+  RETURNED: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+  DONE: 'border-emerald-400/50 bg-emerald-400/15 text-emerald-200',
+};
+
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
+  <span
+    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${
+      STATUS_BADGE[status] ?? 'border-slate-700 bg-slate-800/70 text-slate-300'
+    }`}
+  >
+    {STATUS_LABEL[status] ?? status}
+  </span>
+);
+
+const clock = (iso: string): string =>
+  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** Evento de ticket como línea de tiempo: «título» + insignias de estado. */
+const TicketEventRow: React.FC<{ entry: ThreadEntryDto }> = ({ entry }) => {
+  const title = /^«(.+?)»/.exec(entry.body)?.[1];
+  const move = /\((\w+)\s*(?:→|->)\s*(\w+)\)/.exec(entry.body);
+  const created = /\((\w+)\)\s*$/.exec(entry.body);
+  return (
+    <div className="flex gap-2.5">
+      <div className="flex flex-col items-center">
+        <span className="mt-1 h-2 w-2 rounded-full bg-cyan-400 ring-4 ring-cyan-500/10" />
+        <span className="mt-1 w-px flex-1 bg-slate-800" />
+      </div>
+      <div className="min-w-0 flex-1 pb-1">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+          <span className="font-medium uppercase tracking-wide">
+            {entry.kind === 'CREATED' ? 'Ticket creado' : entry.kind === 'STATUS_CHANGED' ? 'Cambio de estado' : entry.kind}
+          </span>
+          <span className="font-mono">{clock(entry.createdAt)}</span>
+        </div>
+        {title && <div className="mt-0.5 truncate text-[11px] font-medium text-slate-200">{title}</div>}
+        {move ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <StatusBadge status={move[1]} />
+            <span className="text-slate-600">→</span>
+            <StatusBadge status={move[2]} />
+          </div>
+        ) : created && entry.kind === 'CREATED' ? (
+          <div className="mt-1">
+            <StatusBadge status={created[1]} />
+          </div>
+        ) : (
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] text-slate-400">{entry.body}</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Mensaje del CEO (derecha) o del agente (izquierda). */
+const ChatBubble: React.FC<{
+  entry: ThreadEntryDto;
+  isHuman: boolean;
+  agentName: string;
+  agentColor: string;
+}> = ({ entry, isHuman, agentName, agentColor }) => (
+  <div className={`flex gap-2 ${isHuman ? 'flex-row-reverse' : ''}`}>
+    <div
+      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-slate-950"
+      style={{ backgroundColor: isHuman ? '#22d3ee' : agentColor }}
+    >
+      {(isHuman ? 'CEO' : agentName).slice(0, 2).toUpperCase()}
+    </div>
+    <div className={`max-w-[85%] ${isHuman ? 'items-end text-right' : ''}`}>
+      <div
+        className={`flex items-center gap-1.5 text-[10px] text-slate-500 ${isHuman ? 'flex-row-reverse' : ''}`}
+      >
+        <span className={`font-semibold ${isHuman ? 'text-cyan-400' : 'text-amber-400'}`}>
+          {isHuman ? 'Tú (CEO)' : agentName}
+        </span>
+        <span className="rounded bg-slate-800/80 px-1 font-mono text-[9px] uppercase">{entry.kind}</span>
+        <span className="font-mono text-[9px]">{clock(entry.createdAt)}</span>
+      </div>
+      <div
+        className={`mt-1 inline-block whitespace-pre-wrap break-words rounded-2xl border px-3 py-2 text-left text-[12px] leading-relaxed ${
+          isHuman
+            ? 'rounded-tr-md border-cyan-500/30 bg-cyan-950/30 text-slate-100'
+            : 'rounded-tl-md border-slate-700/80 bg-slate-900/70 text-slate-200'
+        }`}
+      >
+        {entry.body}
+      </div>
+      {isHuman && (
+        <div className="mt-0.5 text-[9px] italic text-slate-500">
+          Pendiente · se ejecutará cuando se conecte el orquestador (Fase 2)
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
   agents,
   selectedAgentId,
@@ -90,6 +202,8 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
   const [summary, setSummary] = useState<StatusSummaryDto | null>(null);
   const [loadingSummary, setLoadingSummary] = useState<boolean>(false);
   const [messages, setMessages] = useState<ThreadEntryDto[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [stateOpen, setStateOpen] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
   const [orderText, setOrderText] = useState<string>('');
   const [orderKind, setOrderKind] = useState<'ORDER' | 'QUESTION' | 'NOTE'>('ORDER');
@@ -408,7 +522,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
   return (
     <aside
       aria-label="Panel de mando de la Oficina IA"
-      className="absolute right-4 top-4 bottom-4 z-20 flex w-full max-w-[380px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-[#0B1220]/95 shadow-2xl backdrop-blur select-none"
+      className="absolute right-4 top-4 bottom-4 z-20 flex w-full max-w-[440px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-[#0B1220]/95 shadow-2xl backdrop-blur select-none"
     >
       {/* Header con botón de plegar */}
       <div className="flex shrink-0 items-center justify-between border-b border-slate-800/90 px-4 py-3">
@@ -431,12 +545,20 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
       <div className="flex flex-1 flex-col overflow-y-auto px-4 py-3 space-y-3.5 scrollbar-thin scrollbar-thumb-slate-700">
         {/* a) CÁMARA COMPACTA */}
         <section aria-label="Control de cámara">
-          <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400">
+          <button
+            type="button"
+            onClick={() => setCameraOpen((o) => !o)}
+            aria-expanded={cameraOpen}
+            className="mb-1.5 flex w-full items-center justify-between rounded-lg text-[11px] font-medium text-slate-400 hover:text-slate-200"
+          >
             <span className="flex items-center gap-1.5">
               <Camera className="h-3.5 w-3.5 text-cyan-400" />
               Cámara
+              <span className="font-mono text-[10px] text-slate-500">· {activePreset}</span>
             </span>
-          </div>
+            <span className="text-[10px] text-slate-500">{cameraOpen ? 'Ocultar' : 'Mostrar'}</span>
+          </button>
+          {cameraOpen && (
           <div className="grid grid-cols-2 gap-1.5 text-xs font-medium sm:grid-cols-3">
             <button
               type="button"
@@ -535,6 +657,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
               Restablecer
             </button>
           </div>
+          )}
         </section>
 
         {/* b) SELECTOR DE CONVERSACIÓN (GLOBAL O AGENTE INDIVIDUAL) */}
@@ -686,13 +809,19 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
         </section>
 
         {/* d) HILO DE CHAT: MENSAJES Y EVENTOS DE TICKET */}
-        <section aria-label="Hilo de conversación" className="flex flex-col flex-1 min-h-[160px]">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Hilo de actividad</span>
+        <section aria-label="Hilo de conversación" className="flex flex-col flex-1 min-h-[360px]">
+          <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5 text-cyan-400" />
+              Hilo de actividad
+              <span className="rounded-md bg-slate-800/80 px-1.5 font-mono text-[10px] text-slate-400">
+                {messages.length}
+              </span>
+            </span>
             {loadingMessages && <span className="text-[10px] text-slate-500">Sincronizando...</span>}
           </div>
 
-          <div className="flex-1 rounded-xl border border-slate-800/80 bg-[#060A13] p-2.5 overflow-y-auto min-h-[220px] max-h-[48vh] space-y-2">
+          <div className="flex-1 min-h-[320px] overflow-y-auto rounded-xl border border-slate-800/80 bg-[#060A13] p-3 space-y-2.5 scrollbar-thin scrollbar-thumb-slate-700">
             {messages.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-500">
                 No hay mensajes aún en este hilo.
@@ -703,51 +832,17 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
                 const isHuman = entry.authorType === 'HUMAN';
 
                 if (isTicketEvent) {
-                  return (
-                    <div
-                      key={entry.id}
-                      className="rounded-lg border border-slate-800/80 bg-slate-900/40 p-2 text-[11px] text-slate-300 font-mono"
-                    >
-                      <div className="flex items-center justify-between text-[9px] text-cyan-400/90 mb-0.5">
-                        <span>TICKET EVENT · {entry.kind}</span>
-                        <span>{new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <p className="text-slate-300 whitespace-pre-wrap break-words">{entry.body}</p>
-                    </div>
-                  );
+                  return <TicketEventRow key={entry.id} entry={entry} />;
                 }
 
                 return (
-                  <div
+                  <ChatBubble
                     key={entry.id}
-                    className={`rounded-xl border p-2 text-xs space-y-1 ${
-                      isHuman
-                        ? 'border-cyan-500/30 bg-cyan-950/20 text-slate-200 ml-3'
-                        : 'border-slate-800 bg-slate-900/60 text-slate-300 mr-3'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className={`font-semibold ${isHuman ? 'text-cyan-400' : 'text-amber-400'}`}>
-                        {isHuman ? 'CEO (Tú)' : selectedAgent?.name ?? 'Agente'}
-                        <span className="ml-1.5 font-mono text-[9px] text-slate-500 font-normal uppercase">
-                          {entry.kind}
-                        </span>
-                      </span>
-                      <span className="font-mono text-[9px] text-slate-500">
-                        {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-200 whitespace-pre-wrap break-words">
-                      {entry.body}
-                    </p>
-
-                    {isHuman && (
-                      <div className="text-[9px] text-slate-400/90 pt-0.5 font-sans italic">
-                        Pendiente · se ejecutará cuando se conecte el orquestador (Fase 2)
-                      </div>
-                    )}
-                  </div>
+                    entry={entry}
+                    isHuman={isHuman}
+                    agentName={selectedAgent?.name ?? 'Agente'}
+                    agentColor={selectedAgent?.color ?? '#f59e0b'}
+                  />
                 );
               })
             )}
@@ -851,9 +946,16 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
         {/* f) BOTONES DE CAMBIO DE ESTADO DEL AGENTE SELECCIONADO */}
         {conversationMode === 'AGENT' && selectedAgent && (
           <section aria-label="Transiciones de estado" className="border-t border-slate-800/80 pt-2.5 space-y-1.5">
-            <div className="text-[11px] text-slate-400 font-medium">
-              Ubicación y estado:
-            </div>
+            <button
+              type="button"
+              onClick={() => setStateOpen((o) => !o)}
+              aria-expanded={stateOpen}
+              className="flex w-full items-center justify-between text-[11px] font-medium text-slate-400 hover:text-slate-200"
+            >
+              <span>Ubicación y estado</span>
+              <span className="text-[10px] text-slate-500">{stateOpen ? 'Ocultar' : 'Mostrar'}</span>
+            </button>
+            {stateOpen && (
             <div className="grid grid-cols-1 gap-1.5">
               <button
                 type="button"
@@ -889,6 +991,7 @@ export const OfficeControlPanel: React.FC<OfficeControlPanelProps> = ({
                 Descansar · Zona de descanso
               </button>
             </div>
+            )}
           </section>
         )}
       </div>
