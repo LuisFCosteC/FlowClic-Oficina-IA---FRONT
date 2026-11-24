@@ -236,6 +236,7 @@ export const ACTION_DEFINITIONS: ActionDefinition[] = [
 export const VALID_TRANSITIONS: Array<[TicketStatus, TicketStatus]> = [
   ['PENDING', 'IN_PROGRESS'],
   ['IN_PROGRESS', 'IN_SENIOR_REVIEW'],
+  ['IN_PROGRESS', 'IN_QA'],
   ['IN_SENIOR_REVIEW', 'IN_QA'],
   ['IN_SENIOR_REVIEW', 'RETURNED'],
   ['IN_QA', 'IN_REVIEW'],
@@ -248,6 +249,7 @@ export const VALID_TRANSITIONS: Array<[TicketStatus, TicketStatus]> = [
 export const TRANSITION_LABELS: Record<string, string> = {
   'PENDING->IN_PROGRESS': 'PENDIENTE → EN CURSO',
   'IN_PROGRESS->IN_SENIOR_REVIEW': 'EN CURSO → REVISIÓN SENIOR',
+  'IN_PROGRESS->IN_QA': 'EN CURSO → EN QA (directo, sin revisor senior)',
   'IN_SENIOR_REVIEW->IN_QA': 'REVISIÓN SENIOR → EN QA',
   'IN_SENIOR_REVIEW->RETURNED': 'REVISIÓN SENIOR → DEVUELTA',
   'IN_QA->IN_REVIEW': 'EN QA → REVISIÓN CTO',

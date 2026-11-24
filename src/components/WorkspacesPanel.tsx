@@ -69,11 +69,25 @@ const slugifyWorkspaceId = (name: string): string =>
     .slice(0, 32)
     .replace(/[-_]+$/, '');
 
+/** Últimos resultados de "Comprobar": se conservan al cambiar de pestaña (solo en memoria). */
+const checkCache: Record<string, WorkspaceCheckState> = {};
+
 export const WorkspacesPanel: React.FC<WorkspacesPanelProps> = ({ projects, projectFilter }) => {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
-  const [checks, setChecks] = useState<Record<string, WorkspaceCheckState>>({});
+  const [checks, setChecksState] = useState<Record<string, WorkspaceCheckState>>(() => ({
+    ...checkCache,
+  }));
+  const setChecks = (
+    fn: (prev: Record<string, WorkspaceCheckState>) => Record<string, WorkspaceCheckState>
+  ) =>
+    setChecksState((prev) => {
+      const next = fn(prev);
+      Object.assign(checkCache, next);
+      return next;
+    });
+  const [checkingAll, setCheckingAll] = useState(false);
 
   // Modal de Crear / Editar
   const [form, setForm] = useState<FormState>({
@@ -133,6 +147,15 @@ export const WorkspacesPanel: React.FC<WorkspacesPanelProps> = ({ projects, proj
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
   const shownWorkspaces =
     projectFilter === 'all' ? workspaces : workspaces.filter((w) => w.projectId === projectFilter);
+
+  const handleCheckAll = async () => {
+    setCheckingAll(true);
+    try {
+      await Promise.all(shownWorkspaces.map((ws) => handleCheck(ws.id)));
+    } finally {
+      setCheckingAll(false);
+    }
+  };
 
   const openCreateModal = () => {
     setForm({
@@ -310,6 +333,19 @@ export const WorkspacesPanel: React.FC<WorkspacesPanelProps> = ({ projects, proj
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Actualizar
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCheckAll()}
+              disabled={checkingAll || loading || shownWorkspaces.length === 0}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-700/80 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-cyan-500/60 hover:text-cyan-200 disabled:opacity-50"
+            >
+              {checkingAll ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              Comprobar todos
             </button>
             <button
               type="button"

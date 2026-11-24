@@ -112,7 +112,7 @@ export const KANBAN_STAGES: TaskStage[] = [
 /** Transiciones válidas del flujo (GM02). La API es la autoridad: esto solo evita ofrecer lo imposible. */
 const VALID_NEXT: Record<ApiTicketStatus, ApiTicketStatus[]> = {
   PENDING: ['IN_PROGRESS'],
-  IN_PROGRESS: ['IN_SENIOR_REVIEW'],
+  IN_PROGRESS: ['IN_SENIOR_REVIEW', 'IN_QA'],
   IN_SENIOR_REVIEW: ['IN_QA', 'RETURNED'],
   IN_QA: ['IN_REVIEW', 'RETURNED'],
   IN_REVIEW: ['DONE', 'RETURNED'],

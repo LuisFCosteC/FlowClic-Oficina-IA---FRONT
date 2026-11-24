@@ -43,7 +43,7 @@ const TABS: Array<{ id: AdminTab; label: string; enabled: boolean }> = [
   { id: 'connections', label: 'Conexiones', enabled: true },
   { id: 'projects', label: 'Proyectos', enabled: true },
   { id: 'workspaces', label: 'Espacios de trabajo', enabled: true },
-  { id: 'project', label: 'Proyecto', enabled: true },
+  { id: 'project', label: 'Empresa', enabled: true },
   { id: 'rules', label: 'Reglas', enabled: true },
   { id: 'limits', label: 'Límites', enabled: true },
   { id: 'users', label: 'Usuarios', enabled: true },

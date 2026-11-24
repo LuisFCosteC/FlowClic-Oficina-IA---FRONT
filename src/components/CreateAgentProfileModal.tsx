@@ -161,7 +161,7 @@ const ListEditor: React.FC<{
 
 const normalizePermissions = (p?: Partial<AgentPermissions>): AgentPermissions => ({
   folderAccess: { ...EMPTY_FOLDER_ACCESS, ...(p?.folderAccess ?? {}) },
-  projectScope: p?.projectScope ?? 'ALL',
+  projectScope: p?.projectScope ?? [],
   actions: p?.actions ?? [],
   ticketTransitions: p?.ticketTransitions ?? [],
   onlyAssignedTickets: p?.onlyAssignedTickets ?? true,
@@ -243,6 +243,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
   useEffect(() => {
     if (!open) return;
     setLocalError(null);
+    setSomeMode(false);
     if (agentToEdit) {
       setName(agentToEdit.name);
       setRole(agentToEdit.title);
@@ -297,6 +298,24 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
     return { claude, gemini, others };
   }, [modelsList]);
 
+  const isCto = roleType === 'CTO';
+  // Regla: solo el CTO habla con el CEO; el resto reporta a un agente (no al CEO).
+  const changeRoleType = (next: RoleType) => {
+    setRoleType(next);
+    if (next === 'CTO') setReportsTo(CEO);
+    else if (reportsTo === CEO) setReportsTo('');
+  };
+
+  // ¿Su jefe es un revisor senior (puede pasar REVISIÓN SENIOR → EN QA)? Entonces este agente
+  // NO puede ir directo de EN CURSO a EN QA: debe pasar por REVISIÓN SENIOR.
+  const bossIsSenior = otherAgents.some(
+    (a) =>
+      a.id === reportsTo &&
+      (a.permissions?.ticketTransitions ?? []).some(
+        ([f, t]) => f === 'IN_SENIOR_REVIEW' && t === 'IN_QA'
+      )
+  );
+
   const bossName =
     reportsTo === CEO ? 'CEO' : (otherAgents.find((a) => a.id === reportsTo)?.name ?? undefined);
 
@@ -335,6 +354,21 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
     });
 
   const scope: ProjectScope = perms.projectScope;
+  // Select global: '' = en blanco (sin proyectos) · ALL = todos, actuales y futuros · SOME = lista
+  type ScopeMode = '' | 'ALL' | 'SOME';
+  const [someMode, setSomeMode] = useState(false);
+  const scopeMode: ScopeMode =
+    scope === 'ALL' ? 'ALL' : someMode || scope.length > 0 ? 'SOME' : '';
+  const changeScopeMode = (mode: ScopeMode) => {
+    setSomeMode(mode === 'SOME');
+    setPerms((p) => ({
+      ...p,
+      projectScope: mode === 'ALL' ? 'ALL' : mode === 'SOME' && p.projectScope !== 'ALL' ? p.projectScope : [],
+    }));
+  };
+  const selectableProjects = projectsList.filter(
+    (p) => p.status === 'ACTIVE' || (scope !== 'ALL' && scope.includes(p.id))
+  );
   const toggleProject = (id: string) =>
     setPerms((p) => {
       const cur = p.projectScope === 'ALL' ? [] : p.projectScope;
@@ -383,7 +417,14 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       functions,
       rules,
       restrictions,
-      permissions: perms,
+      permissions: bossIsSenior
+        ? {
+            ...perms,
+            ticketTransitions: perms.ticketTransitions.filter(
+              ([f, t]) => !(f === 'IN_PROGRESS' && t === 'IN_QA')
+            ),
+          }
+        : perms,
       model,
       limits,
     };
@@ -410,9 +451,10 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
       if (JSON.stringify(restrictions) !== JSON.stringify(agentToEdit.restrictions ?? []))
         changed.restrictions = restrictions;
       if (
-        JSON.stringify(perms) !== JSON.stringify(normalizePermissions(agentToEdit.permissions))
+        JSON.stringify(payload.permissions) !==
+        JSON.stringify(normalizePermissions(agentToEdit.permissions))
       )
-        changed.permissions = perms;
+        changed.permissions = payload.permissions;
       const origModel = agentToEdit.modelConfig ?? { primary: '' };
       if (
         model.primary !== origModel.primary ||
@@ -489,13 +531,6 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
 
         <form onSubmit={(e) => void handleSubmit(e)} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-            {localError && (
-              <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                {localError}
-              </div>
-            )}
-
             {/* Obligatorios */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="block text-xs font-medium text-slate-300">
@@ -524,7 +559,7 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                 Tipo de rol <span className="text-cyan-400">*</span>
                 <select
                   value={roleType}
-                  onChange={(e) => setRoleType(e.target.value as RoleType)}
+                  onChange={(e) => changeRoleType(e.target.value as RoleType)}
                   className={inputCls}
                 >
                   {ROLE_TYPES.map((r) => (
@@ -558,16 +593,32 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
                 <select
                   value={reportsTo}
                   onChange={(e) => setReportsTo(e.target.value)}
-                  className={inputCls}
+                  disabled={isCto}
+                  className={`${inputCls} disabled:opacity-60`}
                 >
-                  <option value="">Selecciona a quién reporta…</option>
-                  <option value={CEO}>CEO</option>
-                  {otherAgents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.title || a.roleType || 'Agente'})
-                    </option>
-                  ))}
+                  {isCto ? (
+                    <option value={CEO}>CEO (el CTO reporta directamente al CEO)</option>
+                  ) : (
+                    <>
+                      <option value="">Selecciona a quién reporta…</option>
+                      {otherAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} ({a.title || a.roleType || 'Agente'})
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
+                {!isCto && otherAgents.length === 0 && (
+                  <span className="mt-1 block text-[11px] text-amber-400">
+                    Aún no hay otros agentes: crea primero al CTO (reporta al CEO).
+                  </span>
+                )}
+                {!isCto && (
+                  <span className="mt-1 block text-[11px] text-slate-500">
+                    Solo el CTO reporta al CEO; el resto reporta a un agente.
+                  </span>
+                )}
               </label>
             </div>
 
@@ -683,59 +734,44 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
               {/* Alcance de proyectos */}
               <div className="mt-5">
                 <h4 className="text-xs font-semibold text-slate-200">Alcance de proyectos</h4>
-                <label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="radio"
-                    name="project-scope"
-                    checked={scope === 'ALL'}
-                    onChange={() => setPerms((p) => ({ ...p, projectScope: 'ALL' }))}
-                    className="h-3.5 w-3.5 text-cyan-500"
-                  />
-                  Todos los proyectos (actuales y futuros)
-                </label>
-                <label className="mt-1.5 flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="radio"
-                    name="project-scope"
-                    checked={scope !== 'ALL'}
-                    onChange={() =>
-                      setPerms((p) => ({ ...p, projectScope: p.projectScope === 'ALL' ? [] : p.projectScope }))
-                    }
-                    className="h-3.5 w-3.5 text-cyan-500"
-                  />
-                  Solo estos proyectos
-                </label>
-                {scope !== 'ALL' && (
+                <select
+                  aria-label="Alcance de proyectos"
+                  value={scopeMode}
+                  onChange={(e) => changeScopeMode(e.target.value as ScopeMode)}
+                  className={inputCls}
+                >
+                  <option value="">— Sin seleccionar (en blanco) —</option>
+                  <option value="ALL">Todos los proyectos (actuales y futuros)</option>
+                  <option value="SOME">Solo algunos proyectos…</option>
+                </select>
+                {scopeMode === '' && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    En blanco: el agente no ve ninguna carpeta de ningún proyecto.
+                  </p>
+                )}
+                {scopeMode === 'SOME' && (
                   <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    {projectsList.filter((p) => p.status === 'ACTIVE' || scope.includes(p.id)).length ===
-                    0 ? (
+                    {selectableProjects.length === 0 ? (
                       <p className="text-[11px] text-amber-400">
                         No hay proyectos: créalos en Administración → Proyectos.
                       </p>
                     ) : (
-                      projectsList
-                        .filter((p) => p.status === 'ACTIVE' || scope.includes(p.id))
-                        .map((p) => (
-                          <label
-                            key={p.id}
-                            className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-300"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={scope.includes(p.id)}
-                              onChange={() => toggleProject(p.id)}
-                              className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
-                            />
-                            {p.name}
-                          </label>
-                        ))
+                      selectableProjects.map((p) => (
+                        <label
+                          key={p.id}
+                          className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-300"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={scope !== 'ALL' && scope.includes(p.id)}
+                            onChange={() => toggleProject(p.id)}
+                            className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
+                          />
+                          {p.name}
+                        </label>
+                      ))
                     )}
                   </div>
-                )}
-                {scope !== 'ALL' && scope.length === 0 && (
-                  <p className="mt-2 text-[11px] text-slate-500">
-                    Sin proyectos seleccionados: el agente no verá ninguna carpeta.
-                  </p>
                 )}
               </div>
 
@@ -772,20 +808,37 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
               <div className="mt-5">
                 <h4 className="text-xs font-semibold text-slate-200">Transiciones de tickets</h4>
                 <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                  {VALID_TRANSITIONS.map(([from, to]) => (
+                  {VALID_TRANSITIONS.map(([from, to]) => {
+                    const direct = from === 'IN_PROGRESS' && to === 'IN_QA';
+                    const locked = direct && bossIsSenior;
+                    return (
                     <label
                       key={`${from}-${to}`}
-                      className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-300"
+                      title={
+                        locked
+                          ? 'Reporta a un revisor senior: debe pasar por REVISIÓN SENIOR'
+                          : direct
+                            ? 'Solo para agentes que no reportan a un revisor senior'
+                            : undefined
+                      }
+                      className={`flex items-center gap-2 rounded-lg border border-slate-800 bg-[#070B14] px-3 py-1.5 text-xs text-slate-300 ${
+                        locked ? 'opacity-40' : ''
+                      }`}
                     >
                       <input
                         type="checkbox"
-                        checked={perms.ticketTransitions.some(([f, t]) => f === from && t === to)}
+                        disabled={locked}
+                        checked={
+                          !locked && perms.ticketTransitions.some(([f, t]) => f === from && t === to)
+                        }
                         onChange={() => toggleTransition(from, to)}
                         className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-cyan-500"
                       />
                       {TRANSITION_LABELS[`${from}->${to}`] ?? `${from} → ${to}`}
+                      {locked && <Lock className="h-3 w-3 text-slate-500" />}
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
                 <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
                   <input
@@ -886,6 +939,15 @@ export const CreateAgentProfileModal: React.FC<CreateAgentProfileModalProps> = (
             </Collapsible>
           </div>
 
+          {localError && (
+            <div
+              role="alert"
+              className="mx-6 mb-0 mt-3 flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {localError}
+            </div>
+          )}
           <div className="flex items-center justify-end gap-2.5 border-t border-slate-800/80 px-6 py-4">
             <button
               type="button"
