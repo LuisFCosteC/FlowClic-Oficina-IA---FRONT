@@ -1171,6 +1171,28 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         >
           {ceoMeeting ? 'Terminar reunión CEO' : 'Reunión CEO'}
         </button>
+        <button
+          type="button"
+          title="Todos los agentes pasan a trabajar en el laboratorio"
+          onClick={() => {
+            setGlobalMode(null);
+            setMeeting(false);
+            setCeoMeeting(false);
+            try {
+              window.localStorage.removeItem(GLOBAL_MODE_KEY);
+            } catch {
+              /* sin almacenamiento */
+            }
+            // Los agentes bloqueados o sin cuota no se tocan (la API protege esos estados).
+            agents
+              .filter((a) => a.status !== 'working' && a.status !== 'blocked' && a.status !== 'sleep_quota')
+              .forEach((a) => onChangeAgentStatus(a.id, 'working'));
+            flyToPreset('laboratorio');
+          }}
+          className="rounded-xl border border-emerald-500/50 bg-[#0B1F18] px-3 py-1.5 text-xs font-semibold text-emerald-200 shadow-lg transition-colors hover:bg-emerald-500/15"
+        >
+          Trabajar
+        </button>
         {(Object.keys(GLOBAL_MODE_META) as Array<Exclude<GlobalMode, null>>).map((m) => {
           const active = globalMode === m;
           return (
