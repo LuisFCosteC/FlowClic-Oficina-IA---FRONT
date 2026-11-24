@@ -45,13 +45,13 @@ const POLICY_CONFIG: Record<
   },
   cost_saver: {
     label: 'Ahorro Máximo',
-    description: 'Prioriza Gemini Flash y Haiku con purga agresiva de contexto.',
+    description: 'Prioriza los modelos rápidos y económicos con purga agresiva de contexto.',
     baseSavingsPct: 54.2,
     claudeSplit: 34,
   },
   max_precision: {
     label: 'Precisión Máxima',
-    description: 'Enruta decisiones críticas a Claude Opus 5.5 y Gemini Pro.',
+    description: 'Enruta las decisiones críticas a los modelos de mayor capacidad.',
     baseSavingsPct: 24.6,
     claudeSplit: 72,
   },

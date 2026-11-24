@@ -5,29 +5,33 @@ import { AgentStatus, ModelNode, ModelTier, TaskStage } from '../types/orbis';
  * aquí no hay datos de ejemplo.
  */
 
+/**
+ * @deprecated Nivel de modelo antiguo (la API ya no lo usa). Solo etiquetas genéricas, sin
+ * nombres de modelos: esos salen de GET /api/models. Se conserva porque la vista 3D lo importa.
+ */
 export const MODEL_TIER_META: Record<
   ModelTier,
   { label: string; shortLabel: string; claude: string; gemini: string; costHint: string }
 > = {
   opus_pro: {
-    label: 'Opus / Gemini Pro',
-    shortLabel: 'Opus · Pro',
-    claude: 'Claude Opus 5.5',
-    gemini: 'Gemini Pro',
+    label: 'Nivel alto',
+    shortLabel: 'Alto',
+    claude: '',
+    gemini: '',
     costHint: 'Razonamiento crítico',
   },
   sonnet_pro: {
-    label: 'Sonnet / Gemini Pro',
-    shortLabel: 'Sonnet · Pro',
-    claude: 'Claude Sonnet 5.5',
-    gemini: 'Gemini Pro',
+    label: 'Nivel medio',
+    shortLabel: 'Medio',
+    claude: '',
+    gemini: '',
     costHint: 'Ingeniería balanceada',
   },
   haiku_flash: {
-    label: 'Haiku / Gemini Flash',
-    shortLabel: 'Haiku · Flash',
-    claude: 'Claude Haiku 5.5',
-    gemini: 'Gemini Flash',
+    label: 'Nivel rápido',
+    shortLabel: 'Rápido',
+    claude: '',
+    gemini: '',
     costHint: 'Alta velocidad y ahorro',
   },
 };
@@ -81,64 +85,31 @@ export const STATUS_META = {
 /** Descansando: sin trabajo en curso (en reposo o dormido por cuota). */
 export const isResting = (s: AgentStatus): boolean => s === 'idle' || s === 'sleep_quota';
 
-/**
- * Catálogo de modelos (app/domain/models_catalog.py). Solo nombres: tráfico, latencia y
- * peticiones activas empiezan en 0 hasta que la API los mida; no hay métricas inventadas.
- */
-export const INITIAL_MODELS: ModelNode[] = [
-  {
-    id: 'claude-opus-5-5',
-    provider: 'Claude',
-    name: 'Claude Opus 5.5',
-    tier: 'opus_pro',
+/** Los modelos del Cerebro se construyen con GET /api/models (ver App.tsx). */
+export const INITIAL_MODELS: ModelNode[] = [];
+
+/** Nodo de modelo del Cerebro a partir del catálogo de la API (métricas a 0 hasta medirlas). */
+export function modelNodeFromApi(m: {
+  id: string;
+  label: string;
+  provider: string;
+}): ModelNode {
+  const id = m.id.toLowerCase();
+  const tier: ModelTier =
+    id.includes('opus') || id.includes('pro')
+      ? 'opus_pro'
+      : id.includes('sonnet')
+        ? 'sonnet_pro'
+        : 'haiku_flash';
+  return {
+    id: m.id,
+    provider: m.provider.toLowerCase().includes('anthropic') ? 'Claude' : 'Gemini',
+    name: m.label,
+    tier,
     status: 'online',
     trafficShare: 0,
     latencyMs: 0,
     costPer1MTokens: 0,
     activeRequests: 0,
-  },
-  {
-    id: 'claude-sonnet-5-5',
-    provider: 'Claude',
-    name: 'Claude Sonnet 5.5',
-    tier: 'sonnet_pro',
-    status: 'online',
-    trafficShare: 0,
-    latencyMs: 0,
-    costPer1MTokens: 0,
-    activeRequests: 0,
-  },
-  {
-    id: 'claude-haiku-5-5',
-    provider: 'Claude',
-    name: 'Claude Haiku 5.5',
-    tier: 'haiku_flash',
-    status: 'online',
-    trafficShare: 0,
-    latencyMs: 0,
-    costPer1MTokens: 0,
-    activeRequests: 0,
-  },
-  {
-    id: 'gemini-pro',
-    provider: 'Gemini',
-    name: 'Gemini Pro',
-    tier: 'opus_pro',
-    status: 'online',
-    trafficShare: 0,
-    latencyMs: 0,
-    costPer1MTokens: 0,
-    activeRequests: 0,
-  },
-  {
-    id: 'gemini-flash',
-    provider: 'Gemini',
-    name: 'Gemini Flash',
-    tier: 'haiku_flash',
-    status: 'online',
-    trafficShare: 0,
-    latencyMs: 0,
-    costPer1MTokens: 0,
-    activeRequests: 0,
-  },
-];
+  };
+}

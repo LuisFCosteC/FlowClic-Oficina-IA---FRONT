@@ -14,7 +14,7 @@ import {
   TaskStage,
 } from './types/orbis';
 import type { AgentCreatePayload } from './types/agentProfile';
-import { INITIAL_MODELS, isResting } from './data/initialData';
+import { INITIAL_MODELS, isResting, modelNodeFromApi } from './data/initialData';
 import { initModelCatalog } from './utils/models';
 import { api, ApiError } from './api/client';
 import type { ApiAgentCreate, ApiAgentUpdate } from './api/types';
@@ -140,7 +140,9 @@ export default function App() {
   }, [dispatch]);
 
   useEffect(() => {
-    void initModelCatalog();
+    void initModelCatalog().then((list) => {
+      if (list.length > 0) setModels(list.map(modelNodeFromApi));
+    });
     void loadSnapshot();
     return connectRealtime({
       onEvent: (ev) => {
