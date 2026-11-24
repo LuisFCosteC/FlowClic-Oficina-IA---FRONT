@@ -501,7 +501,7 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjec
         </div>
       </div>
 
-      {/* ───────── Rejilla de proyectos ───────── */}
+      {/* ───────── Tabla de proyectos (scroll interno) ───────── */}
       {listed.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-800 px-6 py-16 text-center">
           <FolderKanban className="mx-auto h-10 w-10 text-slate-700" />
@@ -520,28 +520,46 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjec
           )}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {listed.map((p) => {
-            const archived = p.status === 'ARCHIVED';
-            const spaces = wsOf(p.id);
-            return (
-              <article
-                key={p.id}
-                className={`flex flex-col rounded-2xl border border-slate-800/80 bg-[#0A1120]/90 p-5 transition-colors hover:border-slate-600 ${
-                  archived ? 'opacity-70' : ''
-                }`}
-              >
-                <div className="flex items-start gap-3.5">
-                  <div
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-base font-bold text-slate-950 shadow-md ${avatarOf(p.id)}`}
+        <div className="max-h-[calc(100vh-290px)] min-h-[260px] overflow-auto rounded-2xl border border-slate-800/80 bg-[#0A1120]/90">
+          <table className="w-full min-w-[900px] border-collapse text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-[#0D1626] text-[10px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-800">
+                <th className="px-4 py-3 font-medium">Proyecto</th>
+                <th className="px-3 py-3 font-medium">Estado</th>
+                <th className="px-3 py-3 font-medium">Descripción</th>
+                <th className="px-3 py-3 font-medium">Stack</th>
+                <th className="px-3 py-3 text-center font-medium">Espacios</th>
+                <th className="px-3 py-3 text-center font-medium">Objetivos</th>
+                <th className="px-4 py-3 text-right font-medium">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/70">
+              {listed.map((p) => {
+                const archived = p.status === 'ARCHIVED';
+                const spaces = wsOf(p.id);
+                return (
+                  <tr
+                    key={p.id}
+                    className={`align-middle transition-colors hover:bg-slate-800/30 ${
+                      archived ? 'opacity-70' : ''
+                    }`}
                   >
-                    {initials(p.name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="truncate text-sm font-semibold text-slate-50">{p.name}</h3>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-xs font-bold text-slate-950 ${avatarOf(p.id)}`}
+                        >
+                          {initials(p.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-slate-100">{p.name}</div>
+                          <div className="font-mono text-[11px] text-cyan-400">{p.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
                       <span
-                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                           archived
                             ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
                             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
@@ -549,91 +567,75 @@ export const ProjectsPanel: React.FC<ProjectsPanelProps> = ({ projects, onProjec
                       >
                         {archived ? 'Archivado' : 'Activo'}
                       </span>
-                    </div>
-                    <div className="font-mono text-[11px] text-cyan-400">{p.id}</div>
-                  </div>
-                </div>
-
-                <p className="mt-3 line-clamp-2 min-h-[2.5rem] text-xs leading-relaxed text-slate-400">
-                  {p.description || 'Sin descripción.'}
-                </p>
-
-                {p.stack.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {p.stack.slice(0, 4).map((t) => (
-                      <span
-                        key={t}
-                        className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-300"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                    {p.stack.length > 4 && (
-                      <span className="px-1 text-[10px] text-slate-500">+{p.stack.length - 4}</span>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-800/70 pt-3 text-center">
-                  <div>
-                    <div className="font-mono text-sm font-semibold text-slate-100">{spaces.length}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Espacios</div>
-                  </div>
-                  <div>
-                    <div className="font-mono text-sm font-semibold text-slate-100">{p.goals.length}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Objetivos</div>
-                  </div>
-                  <div>
-                    <div className="font-mono text-sm font-semibold text-slate-100">{p.stack.length}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Tecnologías</div>
-                  </div>
-                </div>
-
-                {spaces.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {spaces.map((w) => {
-                      const kind = w.kind ?? 'other';
-                      return (
-                        <span
-                          key={w.id}
-                          title={w.path}
-                          className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] ${KIND_STYLE[kind]}`}
+                    </td>
+                    <td className="max-w-[260px] px-3 py-3 text-slate-400">
+                      <div className="line-clamp-2" title={p.description}>
+                        {p.description || 'Sin descripción.'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex max-w-[220px] flex-wrap gap-1">
+                        {p.stack.slice(0, 3).map((t) => (
+                          <span
+                            key={t}
+                            className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-300"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                        {p.stack.length > 3 && (
+                          <span className="text-[10px] text-slate-500">+{p.stack.length - 3}</span>
+                        )}
+                        {p.stack.length === 0 && <span className="text-slate-600">—</span>}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <div className="flex flex-wrap justify-center gap-1">
+                        {spaces.length === 0 && <span className="text-slate-600">0</span>}
+                        {spaces.map((w) => (
+                          <span
+                            key={w.id}
+                            title={w.path}
+                            className={`rounded-md border px-1.5 py-0.5 font-mono text-[10px] ${KIND_STYLE[w.kind ?? 'other']}`}
+                          >
+                            {w.id}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-center font-mono text-slate-200">{p.goals.length}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionError(null);
+                            setConfirm(p);
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] ${
+                            archived
+                              ? 'border-emerald-700/80 bg-emerald-950/20 text-emerald-300 hover:bg-emerald-900/40'
+                              : 'border-amber-900/60 bg-amber-950/20 text-amber-300 hover:bg-amber-900/40'
+                          }`}
                         >
-                          {w.id}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="mt-auto flex items-center justify-end gap-2 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActionError(null);
-                      setConfirm(p);
-                    }}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] ${
-                      archived
-                        ? 'border-emerald-700/80 bg-emerald-950/20 text-emerald-300 hover:bg-emerald-900/40'
-                        : 'border-amber-900/60 bg-amber-950/20 text-amber-300 hover:bg-amber-900/40'
-                    }`}
-                  >
-                    {archived ? <RotateCcw className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
-                    {archived ? 'Restaurar' : 'Archivar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(p)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-medium text-cyan-200 hover:bg-cyan-500/20"
-                  >
-                    <Pencil className="h-3 w-3" />
-                    Editar
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+                          {archived ? <RotateCcw className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                          {archived ? 'Restaurar' : 'Archivar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(p)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-500/12 px-3 py-1.5 text-[11px] font-medium text-cyan-200 hover:bg-cyan-500/20"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Editar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
