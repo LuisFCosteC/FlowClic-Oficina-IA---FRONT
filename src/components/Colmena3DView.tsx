@@ -37,6 +37,7 @@ import {
   ZoneSlot,
   type InfoTarget,
 } from './three/sceneBuilder';
+import { api } from '../api/client';
 import { NavGrid } from './three/navGrid';
 import { MeetingChat, type MeetingReport } from './MeetingChat';
 import { createContactShadowTexture } from './three/proceduralTextures';
@@ -1026,6 +1027,40 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
 
 
 
+  /** Cambia el modo global y lo guarda en el servidor: la pausa detiene a TODOS (también al
+   * orquestador) sin perder lo que hacían; `null` reanuda y cada agente vuelve a lo suyo. */
+  const applyMode = (next: GlobalMode) => {
+    setGlobalMode(next);
+    try {
+      if (next) window.localStorage.setItem(GLOBAL_MODE_KEY, next);
+      else window.localStorage.removeItem(GLOBAL_MODE_KEY);
+    } catch {
+      /* sin almacenamiento: el estado solo dura la sesión */
+    }
+    void api.setOfficeMode(next ?? 'work').catch(() => {
+      /* si la API no responde, el modo visual igual se aplica y se reintenta al volver a pulsar */
+    });
+  };
+
+  // El servidor manda: al abrir la vista se toma el modo guardado (así lo ven todas las pestañas).
+  useEffect(() => {
+    void api
+      .getOfficeMode()
+      .then(({ mode }) => {
+        const next: GlobalMode = mode === 'work' ? null : mode;
+        setGlobalMode(next);
+        try {
+          if (next) window.localStorage.setItem(GLOBAL_MODE_KEY, next);
+          else window.localStorage.removeItem(GLOBAL_MODE_KEY);
+        } catch {
+          /* sin almacenamiento */
+        }
+      })
+      .catch(() => {
+        /* API caída: se mantiene el modo local */
+      });
+  }, []);
+
   const flyToPreset = (preset: CameraPresetKey) => {
     setActivePreset(preset);
     const cfg = CAMERA_PRESETS[preset];
@@ -1154,12 +1189,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
             setCeoMeeting(next);
             if (next) {
               setMeeting(false);
-              setGlobalMode(null);
-              try {
-                window.localStorage.removeItem(GLOBAL_MODE_KEY);
-              } catch {
-                /* sin almacenamiento */
-              }
+              applyMode(null);
               flyToPreset('oficina_ceo');
             }
           }}
@@ -1173,21 +1203,12 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
         </button>
         <button
           type="button"
-          title="Todos los agentes pasan a trabajar en el laboratorio"
+          title="Reanuda la oficina: cada agente vuelve a lo suyo; sin tareas, descansa"
           onClick={() => {
-            setGlobalMode(null);
+            applyMode(null);
             setMeeting(false);
             setCeoMeeting(false);
-            try {
-              window.localStorage.removeItem(GLOBAL_MODE_KEY);
-            } catch {
-              /* sin almacenamiento */
-            }
-            // Los agentes bloqueados o sin cuota no se tocan (la API protege esos estados).
-            agents
-              .filter((a) => a.status !== 'working' && a.status !== 'blocked' && a.status !== 'sleep_quota')
-              .forEach((a) => onChangeAgentStatus(a.id, 'working'));
-            flyToPreset('laboratorio');
+            flyToPreset('overview');
           }}
           className="rounded-xl border border-emerald-500/50 bg-[#0B1F18] px-3 py-1.5 text-xs font-semibold text-emerald-200 shadow-lg transition-colors hover:bg-emerald-500/15"
         >
@@ -1201,13 +1222,7 @@ export const Colmena3DView: React.FC<Colmena3DViewProps> = ({
               type="button"
               onClick={() => {
                 const next = active ? null : m;
-                setGlobalMode(next);
-                try {
-                  if (next) window.localStorage.setItem(GLOBAL_MODE_KEY, next);
-                  else window.localStorage.removeItem(GLOBAL_MODE_KEY);
-                } catch {
-                  /* sin almacenamiento: el estado solo dura la sesión */
-                }
+                applyMode(next);
                 if (next) {
                   setMeeting(false);
                   setCeoMeeting(false);

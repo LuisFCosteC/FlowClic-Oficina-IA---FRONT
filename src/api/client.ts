@@ -190,6 +190,10 @@ export const api = {
   createBackup: () => request<ApiDbBackupResult>('POST', '/api/admin/backup'),
 
   createTicket: (body: ApiRequestCreate) => request<ApiTicket>('POST', '/api/tickets', body),
+  /** Modo de la oficina: work (normal) o pausa global sin perder el trabajo. */
+  getOfficeMode: () => request<{ mode: 'work' | 'breakfast' | 'lunch' | 'sleep' }>('GET', '/api/office/mode'),
+  setOfficeMode: (mode: 'work' | 'breakfast' | 'lunch' | 'sleep') =>
+    request<{ mode: 'work' | 'breakfast' | 'lunch' | 'sleep' }>('PUT', '/api/office/mode', { mode }),
   /** Borra tickets (y sus eventos, aprobaciones y mensajes). No toca a los agentes. */
   purgeTickets: (scope: 'done' | 'all') =>
     request<{ deleted: number }>('DELETE', `/api/admin/tickets?scope=${scope}`),
