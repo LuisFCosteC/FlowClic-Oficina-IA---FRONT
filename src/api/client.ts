@@ -190,6 +190,9 @@ export const api = {
   createBackup: () => request<ApiDbBackupResult>('POST', '/api/admin/backup'),
 
   createTicket: (body: ApiRequestCreate) => request<ApiTicket>('POST', '/api/tickets', body),
+  /** Borra tickets (y sus eventos, aprobaciones y mensajes). No toca a los agentes. */
+  purgeTickets: (scope: 'done' | 'all') =>
+    request<{ deleted: number }>('DELETE', `/api/admin/tickets?scope=${scope}`),
   editTicket: (
     id: string,
     body: {
