@@ -80,48 +80,60 @@ export function agentFromApi(a: ApiAgent): Agent {
 const STAGE_FROM_TICKET: Record<ApiTicketStatus, TaskStage> = {
   PENDING: 'backlog',
   IN_PROGRESS: 'in_dev',
-  RETURNED: 'in_dev',
+  IN_SENIOR_REVIEW: 'senior_review',
   IN_QA: 'sheldon_review',
   IN_REVIEW: 'ceo_approval',
   DONE: 'completed',
+  RETURNED: 'returned',
 };
 
-/** Estado de la API al que lleva soltar una tarjeta en cada columna. */
 const TICKET_FOR_STAGE: Record<TaskStage, ApiTicketStatus> = {
   backlog: 'PENDING',
   in_dev: 'IN_PROGRESS',
+  senior_review: 'IN_SENIOR_REVIEW',
   sheldon_review: 'IN_QA',
   ceo_approval: 'IN_REVIEW',
   completed: 'DONE',
+  returned: 'RETURNED',
+};
+
+/** Columnas del Kanban, en orden. */
+export const KANBAN_STAGES: TaskStage[] = [
+  'backlog',
+  'in_dev',
+  'senior_review',
+  'sheldon_review',
+  'ceo_approval',
+  'completed',
+  'returned',
+];
+
+/** Transiciones válidas del flujo (GM02). La API es la autoridad: esto solo evita ofrecer lo imposible. */
+const VALID_NEXT: Record<ApiTicketStatus, ApiTicketStatus[]> = {
+  PENDING: ['IN_PROGRESS'],
+  IN_PROGRESS: ['IN_SENIOR_REVIEW'],
+  IN_SENIOR_REVIEW: ['IN_QA', 'RETURNED'],
+  IN_QA: ['IN_REVIEW', 'RETURNED'],
+  IN_REVIEW: ['DONE', 'RETURNED'],
+  DONE: [],
+  RETURNED: ['IN_PROGRESS'],
 };
 
 export const stageFromTicket = (s: ApiTicketStatus): TaskStage => STAGE_FROM_TICKET[s];
+export const ticketStatusForStage = (s: TaskStage): ApiTicketStatus => TICKET_FOR_STAGE[s];
 
-/**
- * Transiciones a pedir a la API para llevar un ticket a una columna.
- * Un ticket RETURNED solo puede ir a IN_PROGRESS (§19.4), así que para llegar a revisión de
- * Sheldon se envía primero IN_PROGRESS y después IN_QA.
- */
-export function transitionsForMove(
-  current: ApiTicketStatus,
-  target: TaskStage
-): ApiTicketStatus[] {
-  const to = TICKET_FOR_STAGE[target];
-  if (current === 'RETURNED' && to === 'IN_QA') return ['IN_PROGRESS', 'IN_QA'];
-  return [to];
-}
+/** Columnas a las que se puede mover un ticket desde su estado actual. */
+export const validTargetStages = (current: ApiTicketStatus): TaskStage[] =>
+  VALID_NEXT[current].map((s) => STAGE_FROM_TICKET[s]);
+
+export const canMoveTo = (current: ApiTicketStatus, target: TaskStage): boolean =>
+  VALID_NEXT[current].includes(TICKET_FOR_STAGE[target]);
 
 const PRIORITY_FROM_API: Record<ApiPriority, TaskPriority> = {
   HIGH: 'alta',
   MEDIUM: 'media',
   LOW: 'baja',
 };
-const PRIORITY_TO_API: Record<TaskPriority, ApiPriority> = {
-  alta: 'HIGH',
-  media: 'MEDIUM',
-  baja: 'LOW',
-};
-export const priorityToApi = (p: TaskPriority): ApiPriority => PRIORITY_TO_API[p];
 
 export function ticketFromApi(t: ApiTicket): KanbanTask {
   return {
@@ -129,11 +141,15 @@ export function ticketFromApi(t: ApiTicket): KanbanTask {
     title: t.title,
     description: t.description,
     project: t.project ?? '',
+    projectId: t.projectId ?? undefined,
     assigneeId: t.assignedAgentId ?? '',
     model: t.model ?? undefined,
     modelTier: t.modelTier,
     stage: stageFromTicket(t.status),
-    priority: PRIORITY_FROM_API[t.priority],
+    priority: t.priority ? PRIORITY_FROM_API[t.priority] : null,
+    kind: t.kind ?? 'TASK',
+    parentId: t.parentTicketId ?? undefined,
+    requirement: t.requirement ?? '',
     estimatedCostUsd: t.estimatedCostUsd,
     updatedAt: formatRelative(t.updatedAt),
     apiStatus: t.status,

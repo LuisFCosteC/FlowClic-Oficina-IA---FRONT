@@ -21,7 +21,10 @@ import type {
   ApiSetupStatus,
   ApiSnapshot,
   ApiTicket,
-  ApiTicketCreate,
+  ApiProject,
+  ApiProjectCreate,
+  ApiProjectUpdate,
+  ApiRequestCreate,
   ApiTicketStatus,
   ApiWorkspace,
   ApiWorkspaceBody,
@@ -173,9 +176,23 @@ export const api = {
     request<ApiDbInfo>('PUT', '/api/admin/db', body),
   createBackup: () => request<ApiDbBackupResult>('POST', '/api/admin/backup'),
 
-  createTicket: (body: ApiTicketCreate) => request<ApiTicket>('POST', '/api/tickets', body),
+  createTicket: (body: ApiRequestCreate) => request<ApiTicket>('POST', '/api/tickets', body),
   transitionTicket: (id: string, to: ApiTicketStatus) =>
     request<ApiTicket>('POST', `/api/tickets/${encodeURIComponent(id)}/transition`, { to }),
+
+  listProjects: (includeArchived = false) =>
+    request<ApiProject[]>(
+      'GET',
+      `/api/admin/projects${includeArchived ? '?includeArchived=true' : ''}`
+    ),
+  createProject: (body: ApiProjectCreate) =>
+    request<ApiProject>('POST', '/api/admin/projects', body),
+  updateProject: (id: string, body: ApiProjectUpdate) =>
+    request<ApiProject>('PATCH', `/api/admin/projects/${encodeURIComponent(id)}`, body),
+  archiveProject: (id: string) =>
+    request<ApiProject>('POST', `/api/admin/projects/${encodeURIComponent(id)}/archive`),
+  restoreProject: (id: string) =>
+    request<ApiProject>('POST', `/api/admin/projects/${encodeURIComponent(id)}/restore`),
 
   // Bolsa global de claves API (KEY01). La clave nunca vuelve del servidor: solo `last4`.
   listKeys: () => request<ProviderKey[]>('GET', '/api/admin/keys'),

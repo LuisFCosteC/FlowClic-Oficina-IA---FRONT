@@ -1,5 +1,5 @@
 import { useReducer } from 'react';
-import type { ApiAgent, ApiApproval, ApiSnapshot, ApiTicket } from '../api/types';
+import type { ApiAgent, ApiApproval, ApiProject, ApiSnapshot, ApiTicket } from '../api/types';
 
 /** Estado del servidor tal como llega de la API (T74). No contiene lógica de negocio. */
 export type ConnectionPhase =
@@ -15,6 +15,7 @@ export interface OfficeState {
   agents: ApiAgent[];
   tickets: ApiTicket[];
   approvals: ApiApproval[];
+  projects: ApiProject[];
 }
 
 export type OfficeAction =
@@ -24,7 +25,8 @@ export type OfficeAction =
   | { type: 'agent.remove'; id: string }
   | { type: 'ticket.upsert'; ticket: ApiTicket }
   | { type: 'ticket.remove'; id: string }
-  | { type: 'approval.upsert'; approval: ApiApproval };
+  | { type: 'approval.upsert'; approval: ApiApproval }
+  | { type: 'project.upsert'; project: ApiProject };
 
 export const initialOfficeState: OfficeState = {
   phase: 'loading',
@@ -32,6 +34,7 @@ export const initialOfficeState: OfficeState = {
   agents: [],
   tickets: [],
   approvals: [],
+  projects: [],
 };
 
 function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
@@ -51,6 +54,7 @@ function reducer(state: OfficeState, action: OfficeAction): OfficeState {
         agents: action.snapshot.agents,
         tickets: action.snapshot.tickets,
         approvals: action.snapshot.approvals,
+        projects: action.snapshot.projects ?? [],
       };
     case 'failed':
       return { ...state, phase: action.phase, errorMessage: action.message };
@@ -67,6 +71,8 @@ function reducer(state: OfficeState, action: OfficeAction): OfficeState {
       return { ...state, tickets: state.tickets.filter((t) => t.id !== action.id) };
     case 'approval.upsert':
       return { ...state, approvals: upsertById(state.approvals, action.approval) };
+    case 'project.upsert':
+      return { ...state, projects: upsertById(state.projects, action.project) };
     default:
       return state;
   }

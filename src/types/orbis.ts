@@ -27,9 +27,11 @@ export type RoutingPolicy = 'balanced' | 'cost_saver' | 'max_precision';
 export type TaskStage =
   | 'backlog'
   | 'in_dev'
-  | 'sheldon_review'
-  | 'ceo_approval'
-  | 'completed';
+  | 'senior_review' // IN_SENIOR_REVIEW · REVISIÓN SENIOR
+  | 'sheldon_review' // IN_QA · EN QA (la clave se conserva por la vista 3D)
+  | 'ceo_approval' // IN_REVIEW · REVISIÓN CTO (ídem)
+  | 'completed'
+  | 'returned'; // RETURNED · DEVUELTA
 
 export type TaskPriority = 'alta' | 'media' | 'baja';
 
@@ -103,7 +105,12 @@ export interface KanbanTask {
   model?: string;
   modelTier?: ModelTier;
   stage: TaskStage;
-  priority: TaskPriority;
+  /** null = "Por definir" (lo decide el CTO). */
+  priority: TaskPriority | null;
+  kind?: 'REQUEST' | 'TASK';
+  parentId?: string;
+  projectId?: string;
+  requirement?: string;
   estimatedCostUsd: number;
   updatedAt: string;
   /** Estado exacto del ticket en la API (la columna `stage` lo resume). */
@@ -112,14 +119,11 @@ export interface KanbanTask {
   returned?: boolean;
 }
 
-/** Datos del formulario "Nueva tarea": la API siempre crea el ticket en PENDIENTE. */
+/** Datos del formulario "Nueva tarea" (pedido del CEO): la API lo asigna sola al CTO. */
 export interface NewTaskInput {
   title: string;
-  description: string;
-  project: string;
-  assigneeId: string;
-  modelTier: ModelTier;
-  priority: TaskPriority;
+  requirement: string;
+  projectId: string;
 }
 
 /** Datos del modal "Crear agente". */

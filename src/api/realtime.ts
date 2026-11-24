@@ -1,5 +1,5 @@
 import { API_URL, CONFIG_ERROR } from './config';
-import type { ApiAgent, ApiApproval, ApiTicket } from './types';
+import type { ApiAgent, ApiApproval, ApiProject, ApiTicket } from './types';
 
 export type RealtimeEvent =
   | { type: 'agent.created' | 'agent.updated'; agent: ApiAgent }
@@ -7,6 +7,7 @@ export type RealtimeEvent =
   | { type: 'ticket.created' | 'ticket.updated'; ticket: ApiTicket }
   | { type: 'ticket.deleted'; id: string }
   | { type: 'approval.created' | 'approval.updated'; approval: ApiApproval }
+  | { type: 'project.created' | 'project.updated' | 'project.archived'; project: ApiProject }
   | { type: 'settings.updated'; key: 'project' | 'limits'; value: unknown };
 
 export interface RealtimeHandlers {
@@ -84,6 +85,12 @@ export function connectRealtime(handlers: RealtimeHandlers): () => void {
       es.addEventListener(type, (e) => {
         const approval = parse<ApiApproval>(e);
         if (approval) handlers.onEvent({ type, approval });
+      });
+    }
+    for (const type of ['project.created', 'project.updated', 'project.archived'] as const) {
+      es.addEventListener(type, (e) => {
+        const project = parse<ApiProject>(e);
+        if (project) handlers.onEvent({ type, project });
       });
     }
     es.addEventListener('settings.updated', (e) => {

@@ -36,19 +36,13 @@ export const TASK_STAGE_META: Record<
   TaskStage,
   { label: string; shortLabel: string; accent: string }
 > = {
-  backlog: { label: 'Backlog', shortLabel: 'Backlog', accent: '#64748B' },
-  in_dev: { label: 'En Desarrollo', shortLabel: 'Desarrollo', accent: '#10B981' },
-  sheldon_review: {
-    label: 'Revisión de Sheldon',
-    shortLabel: 'Rev. Sheldon',
-    accent: '#F59E0B',
-  },
-  ceo_approval: {
-    label: 'Aprobación CEO',
-    shortLabel: 'Aprob. CEO',
-    accent: '#06B6D4',
-  },
-  completed: { label: 'Completado', shortLabel: 'Completado', accent: '#38BDF8' },
+  backlog: { label: 'Pendiente', shortLabel: 'Pendiente', accent: '#64748B' },
+  in_dev: { label: 'En curso', shortLabel: 'En curso', accent: '#10B981' },
+  senior_review: { label: 'Revisión senior', shortLabel: 'Rev. senior', accent: '#A78BFA' },
+  sheldon_review: { label: 'En QA', shortLabel: 'QA', accent: '#F59E0B' },
+  ceo_approval: { label: 'Revisión CTO', shortLabel: 'Rev. CTO', accent: '#06B6D4' },
+  completed: { label: 'Hecho', shortLabel: 'Hecho', accent: '#38BDF8' },
+  returned: { label: 'Devuelta', shortLabel: 'Devuelta', accent: '#F43F5E' },
 };
 
 export const STATUS_META = {

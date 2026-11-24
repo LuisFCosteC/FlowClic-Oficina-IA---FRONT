@@ -23,11 +23,11 @@ import { connectRealtime } from './api/realtime';
 import {
   agentFromApi,
   agentStatusToApi,
-  priorityToApi,
   proposalFromApproval,
   stageFromTicket,
   ticketFromApi,
-  transitionsForMove,
+  ticketStatusForStage,
+  canMoveTo,
 } from './api/mappers';
 import { useOfficeStore } from './state/useOfficeStore';
 import { Sidebar } from './components/Sidebar';
@@ -161,6 +161,11 @@ export default function App() {
           case 'approval.updated':
             dispatch({ type: 'approval.upsert', approval: ev.approval });
             break;
+          case 'project.created':
+          case 'project.updated':
+          case 'project.archived':
+            dispatch({ type: 'project.upsert', project: ev.project });
+            break;
         }
       },
       onReconnect: () => void loadSnapshot(),
@@ -177,6 +182,10 @@ export default function App() {
   // ── Vistas derivadas de lo que dice la API ──
   const agents = useMemo(() => store.agents.map(agentFromApi), [store.agents]);
   const tasks = useMemo(() => store.tickets.map(ticketFromApi), [store.tickets]);
+  const activeProjects = useMemo(
+    () => store.projects.filter((p) => p.status === 'ACTIVE'),
+    [store.projects]
+  );
   const proposals = useMemo(() => {
     const agentsById = new Map(agents.map((a) => [a.id, a]));
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
@@ -244,19 +253,18 @@ export default function App() {
     }
   };
 
-  const handleCreateTask = async (input: NewTaskInput) => {
+  /** Crea un pedido del CEO (lo recibe el CTO). Devuelve el mensaje de error o null. */
+  const handleCreateTask = async (input: NewTaskInput): Promise<string | null> => {
     try {
       const created = await api.createTicket({
         title: input.title,
-        ...(input.description ? { description: input.description } : {}),
-        ...(input.project ? { project: input.project } : {}),
-        assignedAgentId: input.assigneeId || null,
-        modelTier: input.modelTier,
-        priority: priorityToApi(input.priority),
+        requirement: input.requirement,
+        projectId: input.projectId,
       });
       dispatch({ type: 'ticket.upsert', ticket: created });
+      return null;
     } catch (err) {
-      setNotice({ kind: 'error', text: apiMessage(err) });
+      return apiMessage(err);
     }
   };
 
@@ -264,13 +272,15 @@ export default function App() {
     const ticket = ticketsRef.current.find((t) => t.id === taskId);
     if (!ticket || movingRef.current.has(taskId)) return;
     if (stageFromTicket(ticket.status) === newStage) return;
+    if (!canMoveTo(ticket.status, newStage)) {
+      setNotice({ kind: 'error', text: 'Esa transición no es válida en el flujo de tickets.' });
+      return;
+    }
     movingRef.current.add(taskId);
     try {
-      // La tarjeta no se mueve hasta que la API acepta: si responde 409 vuelve a su sitio.
-      for (const to of transitionsForMove(ticket.status, newStage)) {
-        const updated = await api.transitionTicket(taskId, to);
-        dispatch({ type: 'ticket.upsert', ticket: updated });
-      }
+      // La tarjeta no se mueve hasta que la API acepta: si responde 409/403 vuelve a su sitio.
+      const updated = await api.transitionTicket(taskId, ticketStatusForStage(newStage));
+      dispatch({ type: 'ticket.upsert', ticket: updated });
     } catch (err) {
       setNotice({ kind: 'error', text: apiMessage(err) });
     } finally {
@@ -524,6 +534,7 @@ export default function App() {
                     <KanbanPipelineView
                       tasks={tasks}
                       agents={agents}
+                      projects={activeProjects}
                       onMoveTaskStage={handleMoveTaskStage}
                       onCreateTask={handleCreateTask}
                     />

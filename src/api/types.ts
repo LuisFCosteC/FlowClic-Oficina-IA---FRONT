@@ -23,11 +23,13 @@ export type ApiAgentStatus =
 export type ApiTicketStatus =
   | 'PENDING'
   | 'IN_PROGRESS'
+  | 'IN_SENIOR_REVIEW'
   | 'IN_QA'
   | 'IN_REVIEW'
   | 'DONE'
   | 'RETURNED';
 
+export type ApiTicketKind = 'REQUEST' | 'TASK';
 export type ApiPriority = 'HIGH' | 'MEDIUM' | 'LOW';
 export type ApiModelTier = 'opus_pro' | 'sonnet_pro' | 'haiku_flash';
 export type ApiRoleType = 'CTO' | 'DEV_BACKEND' | 'DEV_FRONTEND' | 'QA' | 'CUSTOM';
@@ -42,13 +44,18 @@ export interface ApiModelInfo {
   id: string;
   label: string;
   provider: string;
+  apiModel?: string;
   hasConnection: boolean;
 }
+
+export type ApiWorkspaceKind = 'api' | 'front' | 'docs' | 'mobile' | 'other';
 
 export interface ApiWorkspace {
   id: string;
   name: string;
   path: string;
+  projectId?: string | null;
+  kind?: ApiWorkspaceKind;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -62,6 +69,37 @@ export interface ApiWorkspaceCheck {
 export interface ApiWorkspaceBody {
   name: string;
   path: string;
+  /** Lo que no se envía se conserva; `null` deja el espacio sin proyecto. */
+  projectId?: string | null;
+  kind?: ApiWorkspaceKind;
+}
+
+export type ApiProjectStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface ApiProject {
+  id: string;
+  name: string;
+  description: string;
+  goals: string[];
+  stack: string[];
+  status: ApiProjectStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiProjectCreate {
+  id: string;
+  name: string;
+  description?: string;
+  goals?: string[];
+  stack?: string[];
+}
+
+export interface ApiProjectUpdate {
+  name?: string;
+  description?: string;
+  goals?: string[];
+  stack?: string[];
 }
 
 export interface ApiProjectSettings {
@@ -191,6 +229,7 @@ export interface ApiAgent {
   isCto: boolean;
   currentTask: string | null;
   project: string | null;
+  reportsTo?: string | null;
   consecutiveFailures: number;
   createdAt: string;
   updatedAt: string;
@@ -202,11 +241,20 @@ export interface ApiTicket {
   title: string;
   description: string;
   status: ApiTicketStatus;
-  priority: ApiPriority;
+  /** null = "Por definir" (lo decide el CTO). */
+  priority: ApiPriority | null;
   assignedAgentId: string | null;
+  projectId?: string | null;
+  /** Nombre del proyecto (solo lectura). */
   project: string | null;
   modelTier: ApiModelTier;
+  /** null = "Por definir". */
   model?: string | null;
+  kind?: ApiTicketKind;
+  parentTicketId?: string | null;
+  requirement?: string;
+  priorityLabel?: string;
+  modelLabel?: string;
   estimatedCostUsd: number;
   position: number;
   createdAt: string;
@@ -234,6 +282,7 @@ export interface ApiSnapshot {
   agents: ApiAgent[];
   tickets: ApiTicket[];
   approvals: ApiApproval[];
+  projects?: ApiProject[];
   serverTime: string;
 }
 
@@ -260,14 +309,11 @@ export interface ApiAgentCreate {
 
 export type ApiAgentUpdate = Partial<ApiAgentCreate>;
 
-export interface ApiTicketCreate {
+/** Pedido del CEO: lo recibe el CTO; prioridad y modelo los decide él. */
+export interface ApiRequestCreate {
   title: string;
-  description?: string;
-  priority?: ApiPriority;
-  assignedAgentId?: string | null;
-  project?: string;
-  modelTier?: ApiModelTier;
-  estimatedCostUsd?: number;
+  requirement: string;
+  projectId: string;
 }
 
 export type KeyProvider = 'google' | 'anthropic' | 'openai' | 'other';
